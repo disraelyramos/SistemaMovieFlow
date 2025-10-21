@@ -1,2 +1,5 @@
 # Ignorar archivo de entorno con variables sensibles del frontend
+/frontend/node_modules/
+/frontend/dist/
 /frontend/.env
+/frontend/.env.*
