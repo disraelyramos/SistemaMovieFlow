@@ -1,0 +1,2 @@
+# Ignorar archivo de entorno con variables sensibles del frontend
+/frontend/.env

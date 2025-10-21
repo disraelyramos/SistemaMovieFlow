@@ -1,0 +1,255 @@
+/* =========================
+   Tokens (neutros, sin bg global)
+   ========================= */
+:root{
+  --card-bg: #ffffff;
+  --card-br: 14px;
+  --card-bd: #e9eef3;
+  --card-shadow: 0 8px 18px rgba(16,24,40,.06);
+
+  --txt: #0f172a;
+  --muted: #64748b;
+  --line: rgba(15,23,42,.08);
+
+  --pill-bg: #f1f5f9;
+  --pill-txt: #334155;
+
+  --chip-green-1: #00e3ae;
+  --chip-green-2: #9be15d;
+
+  --accent-rose-1:#ff6aa7;
+  --accent-rose-2:#ff98c3;
+
+  --focus: 0 0 0 3px rgba(59,130,246,.25);
+}
+
+/* =========================
+   Grid de salas
+   ========================= */
+.grid-salas{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(360px,1fr));
+  gap:18px;
+  align-items:stretch;
+}
+
+/* =========================
+   Tarjeta / panel de sala
+   ========================= */
+.panel-sala,
+.sala-card{
+  background: var(--card-bg);
+  border:1px solid var(--card-bd);
+  border-radius: var(--card-br);
+  box-shadow: var(--card-shadow);
+  display:flex;
+  flex-direction:column;
+  min-height: 360px;
+}
+
+/* header */
+.panel-sala__header,
+.sala-card__header{
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid var(--line);
+}
+
+.panel-sala__title{
+  font-weight:800;
+  color:var(--txt);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* contador de asientos (píldora) */
+.pill-asientos{
+  background: var(--pill-bg);
+  color: var(--pill-txt);
+  border-radius: 999px;
+  padding:6px 10px;
+  font-size:.78rem;
+  font-weight:700;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+
+/* body con scroll suave + separación entre chips */
+.panel-sala__body,
+.sala-card__body{
+  padding:14px;
+  flex:1 1 auto;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:16px; /* separa los chips verdes */
+}
+.sala-card__body::-webkit-scrollbar,
+.panel-sala__body::-webkit-scrollbar{ width:8px; }
+.sala-card__body::-webkit-scrollbar-thumb,
+.panel-sala__body::-webkit-scrollbar-thumb{
+  background: rgba(2,6,23,.14);
+  border-radius:8px;
+}
+
+/* respaldo si el DOM no soporta gap */
+.panel-sala__body > .hora-chip + .hora-chip{ margin-top:16px; }
+
+/* estado vacío con claqueta */
+.no-funciones{
+  text-align:center;
+  color:var(--muted);
+  font-size:.92rem;
+  padding:32px 8px;
+}
+.no-funciones .claqueta{
+  width:56px; height:56px;
+  margin:0 auto 10px auto;
+  opacity:.7; display:block;
+  filter: drop-shadow(0 2px 6px rgba(2,6,23,.12));
+}
+
+/* =========================
+   Chip de función (mint)
+   ========================= */
+.hora-chip{
+  width:100%;
+  border:0;
+  border-radius:12px;
+  padding:12px 14px;
+  background: linear-gradient(180deg,var(--chip-green-2),var(--chip-green-1));
+  color:#062b22;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-align:left;
+  box-shadow: 0 6px 14px rgba(2,6,23,.10);
+  transition: transform .06s ease, filter .12s ease, box-shadow .12s ease;
+}
+.hora-chip:hover{ transform: translateY(-2px); filter:brightness(.98); box-shadow: 0 10px 22px rgba(2,6,23,.14); }
+.hora-chip:focus-visible{ outline:none; box-shadow: var(--focus); }
+
+/* poster */
+.hora-chip__poster{
+  width:48px;height:64px;object-fit:cover;flex:0 0 48px;
+  border-radius:8px;background: rgba(255,255,255,.35);
+  box-shadow:0 2px 6px rgba(0,0,0,.12);
+}
+.hora-chip__poster.placeholder{ display:inline-block; }
+
+/* contenido */
+.hora-chip__content{ flex:1 1 auto; min-width:0; }
+.hora-chip__date{
+  font-size:.8rem; opacity:.9; margin-bottom:2px; display:flex; align-items:center; gap:6px;
+}
+.hora-chip__time{
+  font-size:1.05rem; font-weight:800; line-height:1; display:flex; align-items:center; gap:8px;
+}
+.hora-chip__title{
+  margin-top:2px; font-weight:800; line-height:1.15;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.hora-chip__meta{
+  margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.badge-mini{
+  background: rgba(255,255,255,.65);
+  color:#0b2e13;
+  border-radius:6px; padding:2px 6px; font-size:.72rem; font-weight:800;
+}
+
+/* precio a la derecha */
+.hora-chip__price{
+  margin-left:auto; font-weight:900;
+  background: rgba(255,255,255,.75);
+  color:#0b2e13; padding:4px 8px; border-radius:8px;
+}
+
+/* Variante: evento (rosado) */
+.hora-chip--evento{
+  background: linear-gradient(90deg,var(--accent-rose-1),var(--accent-rose-2));
+  color:#fff;
+}
+.hora-chip--evento .badge-mini{ background:#fff; color:#cc2a6a; }
+.hora-chip--evento .hora-chip__price{ background:#fff; color:#cc2a6a; }
+
+/* =========================
+   Botón flotante + modal
+   ========================= */
+.fab-add{
+  position:fixed; right:22px; bottom:22px;
+  width:56px;height:56px;border-radius:999px;border:none;
+  font-size:30px;color:#fff; cursor:pointer;
+  background: linear-gradient(135deg,#6366f1,#8b5cf6);
+  box-shadow:0 10px 22px rgba(2,6,23,.25);
+  display:inline-flex; align-items:center; justify-content:center;
+  transition: transform .12s ease, box-shadow .12s ease;
+  z-index:1050;
+}
+.fab-add:hover{ transform: translateY(-2px); box-shadow:0 12px 26px rgba(2,6,23,.28); }
+
+.modal-overlay{
+  position:fixed; inset:0; background: rgba(2,6,23,.55);
+  display:grid; place-items:center; padding:24px; z-index:1055;
+}
+.modal-card{
+  width:100%; max-width:720px; background:#fff; border-radius:14px;
+  overflow:hidden; box-shadow:0 20px 40px rgba(2,6,23,.30);
+}
+.modal-card__header,.modal-card__footer{
+  padding:14px 16px; background:#f7f7f8; display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid #eef2f6;
+}
+.modal-card__footer{ border-top:1px solid #eef2f6; border-bottom:0; }
+.modal-card__body{ padding:16px; }
+.modal-card__body .row.g-3{
+  display:grid; grid-template-columns:repeat(2,1fr); gap:16px;
+}
+.modal-card__footer button{ margin-right:8px; }
+.btn-close{
+  background:transparent;border:0;width:32px;height:32px;position:relative; cursor:pointer;
+}
+.btn-close::before,.btn-close::after{
+  content:""; position:absolute; top:15px; left:8px; width:16px; height:2px; background:#333;
+}
+.btn-close::before{ transform:rotate(45deg); }
+.btn-close::after{ transform:rotate(-45deg); }
+
+/* =========================
+   Botón “Mostrar todas” (tono suave)
+   ========================= */
+.btn-mostrar-todas,
+button[aria-label="Mostrar todas"],
+button[data-action="mostrar-todas"]{
+  background:#eef4ff;           /* azul suave */
+  color:#1e3a8a;                /* texto azul profundo */
+  border:1px solid #d6e3ff;
+  border-radius:10px;
+  padding:10px 14px;
+  font-weight:600;
+  transition: background .15s ease, border-color .15s ease, transform .06s ease;
+}
+.btn-mostrar-todas:hover,
+button[aria-label="Mostrar todas"]:hover,
+button[data-action="mostrar-todas"]:hover{
+  background:#e3ecff;
+  border-color:#c7dbff;
+  transform: translateY(-1px);
+}
+.btn-mostrar-todas:focus-visible,
+button[aria-label="Mostrar todas"]:focus-visible,
+button[data-action="mostrar-todas"]:focus-visible{
+  outline:none; box-shadow: var(--focus);
+}
+
+/* =========================
+   Responsivo
+   ========================= */
+@media (max-width: 992px){
+  .grid-salas{ grid-template-columns:1fr; }
+  .modal-card__body .row.g-3{ grid-template-columns:1fr; }
+}

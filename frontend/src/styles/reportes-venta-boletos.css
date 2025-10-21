@@ -1,0 +1,35 @@
+.rvb-page{
+  padding: 16px;
+  background: #f7f8fa;
+  min-height: 100%;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+}
+
+.rvb-title{
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.rvb-card{
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(16,24,40,.06);
+  border: 1px solid #e5e7eb;
+}
+
+.rvb-label{
+  color: #6b7280;
+  font-weight: 600;
+}
+
+/* Encabezado oscuro como tu captura */
+.rvb-table thead th{
+  background: #1f2937;
+  color: #fff;
+  font-weight: 700;
+  border-color: #111827;
+}
+
+/* Bordes sutiles en filas */
+.rvb-table tbody td{
+  border-color: #e5e7eb;
+}
