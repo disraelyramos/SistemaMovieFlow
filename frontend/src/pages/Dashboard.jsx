@@ -30,7 +30,7 @@ import AperturaCaja from "../pages/vista personal de ventas/AperturaCaja";
 import CierreDeCaja from "../pages/cierre-de-caja/CierreDeCaja";
 import ResumendeVentas from "./ResumendeVentas";
 import NuevoCombo from "../pages/Combos/NuevoCombo";
-import lotes from './lotes';
+import lotes from './Lotes';
 import Reportes_de_Sala from "../pages/graficas_reportes/Reportes_de_Sala";
 import ReporteventasCategoria from "../pages/graficas_reportes/ReporteventasCategoria";
 
