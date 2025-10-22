@@ -239,7 +239,7 @@ const Login = () => {
           <div className="pro-login-card">
             {/* Sección Cliente */}
             <div className={`pro-form ${!showStaffLogin ? 'centered' : ''}`}>
-              <div className="pro-section-title">Inicia sesión con Google</div>
+              <div className="pro-section-title">INICIA SESIÓN CON TU CORREO</div>
               <div className="pro-section-sub">
                 Compra boletos y reserva eventos en minutos.
               </div>

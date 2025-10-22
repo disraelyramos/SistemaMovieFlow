@@ -89,14 +89,13 @@ export default function ValidacionDeCodigo() {
   const isExpiring = remainingMs <= 5_000 && remainingMs > 0;
   const isExpired = remainingMs === 0;
 
-  // ✅ Política actualizada: 10+ caracteres, mayúscula, minúscula, número y especial
   const validarPwd = (p) => {
     const reglas = [
-      { ok: typeof p === "string" && p.length >= 10, msg: "Debe tener al menos 10 caracteres." },
+      { ok: p.length >= 8, msg: "Debe tener al menos 8 caracteres." },
       { ok: /[A-Z]/.test(p), msg: "Debe incluir al menos una mayúscula." },
       { ok: /[a-z]/.test(p), msg: "Debe incluir al menos una minúscula." },
-      { ok: /\d/.test(p), msg: "Debe incluir al menos un número." },
-      { ok: /[^A-Za-z0-9]/.test(p), msg: "Debe incluir al menos un carácter especial." },
+      { ok: /[0-9]/.test(p), msg: "Debe incluir al menos un número." },
+      { ok: /[!@#$%^&*]/.test(p), msg: "Debe incluir al menos un carácter especial (!@#$%^&*)." },
     ];
     const errores = reglas.filter(r => !r.ok).map(r => r.msg);
     return { esValida: errores.length === 0, errores };

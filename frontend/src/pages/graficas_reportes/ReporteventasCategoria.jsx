@@ -50,6 +50,22 @@ function isValidCurrentMonthRange(desde, hasta) {
   );
 }
 
+/* Paleta de colores suaves y elegantes */
+const COLORS = {
+  snacks_caja: '#93C5FD',     // Azul pastel suave
+  combos_caja: '#FCA5A5',     // Rosa pastel suave
+  snacks_cliente: '#86EFAC',  // Verde pastel suave
+  combos_cliente: '#FCD34D',  // Amarillo pastel suave
+};
+
+/* Colores para hover effects - versión un poco más intensa pero suave */
+const COLORS_HOVER = {
+  snacks_caja: '#60A5FA',
+  combos_caja: '#F87171',
+  snacks_cliente: '#4ADE80',
+  combos_cliente: '#FBBF24',
+};
+
 /* Componente */
 export default function ReporteventasCategoria() {
   const [filtros, setFiltros] = useState(currentMonthRange());
@@ -106,24 +122,83 @@ export default function ReporteventasCategoria() {
   const p = resp?.participacion || {};
   const m = resp?.variacion_mom || {};
 
-  // Tarjetas renombradas y sin snacks_caja
+  // Nombres exactos solicitados
   const cards = [
-    { key:"combos_caja",    title:"Combo",         total:t.combos_caja||0,    pct:p.combos_caja??0,    mom:m.combos_caja },
-    { key:"snacks_cliente", title:"Snack (Sala)",  total:t.snacks_cliente||0, pct:p.snacks_cliente??0, mom:m.snacks_cliente },
-    { key:"combos_cliente", title:"Combo (Sala)",  total:t.combos_cliente||0, pct:p.combos_cliente??0, mom:m.combos_cliente },
+    { key:"snacks_caja",    title:"Snack",          total:t.snacks_caja||0,    pct:p.snacks_caja??0,    mom:m.snacks_caja },
+    { key:"combos_caja",    title:"Combo",          total:t.combos_caja||0,    pct:p.combos_caja??0,    mom:m.combos_caja },
+    { key:"snacks_cliente", title:"Snack (Sala)",   total:t.snacks_cliente||0, pct:p.snacks_cliente??0, mom:m.snacks_cliente },
+    { key:"combos_cliente", title:"Combo (sala)",   total:t.combos_cliente||0, pct:p.combos_cliente??0, mom:m.combos_cliente },
   ];
 
-  // Gráfica de dona: Combo, Snack (Sala), Combo (Sala)
   const doughnutData = useMemo(() => ({
-    labels:["Combo","Snack (Sala)","Combo (Sala)"],
-    datasets:[{ data:[t.combos_caja||0, t.snacks_cliente||0, t.combos_cliente||0] }]
-  }), [t.combos_caja, t.snacks_cliente, t.combos_cliente]);
+    labels:["Snack","Combo","Snack (Sala)","Combo (sala)"],
+    datasets:[{ 
+      data:[
+        t.snacks_caja||0,
+        t.combos_caja||0,
+        t.snacks_cliente||0,
+        t.combos_cliente||0
+      ],
+      backgroundColor: [
+        COLORS.snacks_caja,
+        COLORS.combos_caja,
+        COLORS.snacks_cliente,
+        COLORS.combos_cliente
+      ],
+      borderColor: '#ffffff',
+      borderWidth: 3,
+      hoverBackgroundColor: [
+        COLORS_HOVER.snacks_caja,
+        COLORS_HOVER.combos_caja,
+        COLORS_HOVER.snacks_cliente,
+        COLORS_HOVER.combos_cliente
+      ],
+      hoverBorderColor: '#ffffff',
+      hoverBorderWidth: 4
+    }]
+  }), [t.snacks_caja, t.combos_caja, t.snacks_cliente, t.combos_cliente]);
 
-  // Gráfica de barras: Combo, Snack (Sala), Combo (Sala)
   const barData = useMemo(() => ({
-    labels:["Combo","Snack (Sala)","Combo (Sala)"],
-    datasets:[{ label:"Ventas (GTQ)", data:[t.combos_caja||0, t.snacks_cliente||0, t.combos_cliente||0] }]
-  }), [t.combos_caja, t.snacks_cliente, t.combos_cliente]);
+    labels:["Snack","Combo","Snack (Sala)","Combo (sala)"],
+    datasets:[{ 
+      label:"Ventas (GTQ)", 
+      data:[
+        t.snacks_caja||0,
+        t.combos_caja||0,
+        t.snacks_cliente||0,
+        t.combos_cliente||0
+      ],
+      backgroundColor: [
+        COLORS.snacks_caja,
+        COLORS.combos_caja,
+        COLORS.snacks_cliente,
+        COLORS.combos_cliente
+      ],
+      borderColor: [
+        COLORS.snacks_caja,
+        COLORS.combos_caja,
+        COLORS.snacks_cliente,
+        COLORS.combos_cliente
+      ],
+      borderWidth: 1,
+      hoverBackgroundColor: [
+        COLORS_HOVER.snacks_caja,
+        COLORS_HOVER.combos_caja,
+        COLORS_HOVER.snacks_cliente,
+        COLORS_HOVER.combos_cliente
+      ],
+      hoverBorderColor: [
+        COLORS_HOVER.snacks_caja,
+        COLORS_HOVER.combos_caja,
+        COLORS_HOVER.snacks_cliente,
+        COLORS_HOVER.combos_cliente
+      ],
+      hoverBorderWidth: 2,
+      borderRadius: 8,
+      barPercentage: 0.7,
+      categoryPercentage: 0.8
+    }]
+  }), [t.snacks_caja, t.combos_caja, t.snacks_cliente, t.combos_cliente]);
 
   const monthText = useMemo(() => {
     if (!resp?.rango) return "";
@@ -140,7 +215,7 @@ export default function ReporteventasCategoria() {
         <div className="reporte-sub">{monthText ? `Período: ${monthText}` : "Período: —"}</div>
       </div>
 
-      {/* Filtros (solo inputs con placeholder) */}
+      {/* Filtros */}
       <div className="rc-filtros">
         <input className="rc-input" name="desde" value={filtros.desde}
                onChange={onChange} placeholder="Desde (DD/MM/YYYY)" />
@@ -186,7 +261,7 @@ export default function ReporteventasCategoria() {
         ))}
       </div>
 
-      {/* Gráficas (cada una con 50% de altura del panel) */}
+      {/* Gráficas */}
       <div className="rc-panels">
         <div className="rc-panel">
           <div className="rc-title">Participación por Categoría</div>
@@ -195,8 +270,39 @@ export default function ReporteventasCategoria() {
               data={doughnutData}
               options={{
                 maintainAspectRatio:false,
-                plugins:{ legend:{ position:"bottom" }, tooltip:{ callbacks:{ label:(c)=>fmtGTQ(c.parsed) }}},
-                cutout:"60%",
+                plugins:{ 
+                  legend:{ 
+                    position:"bottom",
+                    labels: {
+                      usePointStyle: true,
+                      padding: 20,
+                      font: {
+                        size: 13,
+                        weight: '500',
+                        family: 'ui-sans-serif, system-ui'
+                      },
+                      color: '#374151'
+                    }
+                  }, 
+                  tooltip:{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    titleColor: '#1F2937',
+                    bodyColor: '#374151',
+                    borderColor: '#E5E7EB',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks:{ 
+                      label:(context) => {
+                        const label = context.label || '';
+                        const value = context.parsed;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                        return `${label}: ${fmtGTQ(value)} (${percentage}%)`;
+                      }
+                    } 
+                  }
+                },
+                cutout:"55%",
               }}
             />
           </div>
@@ -209,10 +315,48 @@ export default function ReporteventasCategoria() {
               data={barData}
               options={{
                 maintainAspectRatio:false,
-                plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:(c)=>fmtGTQ(c.parsed.y) }}},
+                plugins:{ 
+                  legend:{ display:false }, 
+                  tooltip:{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    titleColor: '#1F2937',
+                    bodyColor: '#374151',
+                    borderColor: '#E5E7EB',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks:{ 
+                      label:(context)=>fmtGTQ(context.parsed.y) 
+                    } 
+                  }
+                },
                 scales:{
-                  y:{ beginAtZero:true,
-                      ticks:{ callback:(v)=>new Intl.NumberFormat("es-GT",{style:"currency",currency:"GTQ",maximumFractionDigits:0}).format(v) } }
+                  y:{ 
+                    beginAtZero:true,
+                    ticks:{ 
+                      callback:(v)=>new Intl.NumberFormat("es-GT",{style:"currency",currency:"GTQ",maximumFractionDigits:0}).format(v),
+                      font: {
+                        size: 11,
+                        weight: '500'
+                      },
+                      color: '#6B7280'
+                    },
+                    grid: {
+                      color: 'rgba(0, 0, 0, 0.06)',
+                      drawBorder: false
+                    }
+                  },
+                  x: {
+                    grid: {
+                      display: false
+                    },
+                    ticks: {
+                      font: {
+                        size: 12,
+                        weight: '500'
+                      },
+                      color: '#374151'
+                    }
+                  }
                 }
               }}
             />

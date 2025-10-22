@@ -1,13 +1,29 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { confirmarAccion } from "../../utils/confirmations"; // Confirmación SweetAlert
-import { Link, useLocation } from "react-router-dom";
+import { confirmarAccion } from "../../utils/confirmations";
 import "react-toastify/dist/ReactToastify.css";
 import "../../styles/personal de ventas/aperturaCaja.css";
- import VerificarAdmin from "../../components/verificacion/VerificarAdmin";
+import VerificarAdmin from "../../components/verificacion/verificarAdmin";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+const API_BASE =
+  import.meta?.env?.VITE_API_BASE ||
+  import.meta?.env?.VITE_API_BASE_URL ||
+  import.meta?.env?.VITE_API_URL ||
+  "http://localhost:3001";
+
+/* === Axios con token (mismo patrón del Dashboard) === */
+const client = axios.create({ baseURL: API_BASE, withCredentials: false });
+client.interceptors.request.use((cfg) => {
+  try {
+    const t = localStorage.getItem("mf_token");
+    if (t) {
+      cfg.headers = cfg.headers || {};
+      if (!cfg.headers.Authorization) cfg.headers.Authorization = `Bearer ${t}`;
+    }
+  } catch {}
+  return cfg;
+});
 
 const AperturaCaja = () => {
   const [caja, setCaja] = useState("");
@@ -24,49 +40,59 @@ const AperturaCaja = () => {
     observaciones: false,
   });
 
-  const location = useLocation();
-
-  // 🔒 NUEVO: modal + payload pendiente
+  // 🔒 modal + payload pendiente
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [payloadAperturaPendiente, setPayloadAperturaPendiente] = useState(null);
 
-  // 🔹 Cargar datos iniciales
+  // Helper para rotular Q200 / Q0.50 correctamente
+  const labelDenom = (v) => {
+    const n = Number(v || 0);
+    return n >= 1 ? `Q${Math.round(n)}` : `Q${n.toFixed(2)}`;
+  };
+
+  // Carga inicial
   useEffect(() => {
+    let cancel = false;
     const fetchData = async () => {
       try {
         const [resCajas, resTurnos, resDenoms] = await Promise.all([
-          axios.get(`${API_BASE}/api/ventas/cajas`),
-          axios.get(`${API_BASE}/api/ventas/turnos`),
-          axios.get(`${API_BASE}/api/ventas/denominaciones`),
+          client.get(`/api/ventas/cajas`),
+          client.get(`/api/ventas/turnos`),
+          client.get(`/api/ventas/denominaciones`),
         ]);
+        if (cancel) return;
 
-        setCajas(resCajas.data);
-        setTurnos(resTurnos.data);
-        setDenominaciones(resDenoms.data.map((d) => ({ ...d, cantidad: 0 })));
+        setCajas(Array.isArray(resCajas.data) ? resCajas.data : []);
+        setTurnos(Array.isArray(resTurnos.data) ? resTurnos.data : []);
+        const dens = Array.isArray(resDenoms.data) ? resDenoms.data : [];
+        setDenominaciones(dens.map((d) => ({ ...d, cantidad: 0 })));
       } catch (error) {
         console.error("❌ Error cargando datos:", error);
-        toast.error("Error cargando datos iniciales");
+        toast.error("Error cargando datos de apertura");
       }
     };
-
     fetchData();
+    return () => {
+      cancel = true;
+    };
   }, []);
 
-  // 🔹 Manejar cantidad ingresada
+  // Manejar cantidad
   const handleCantidadChange = (index, value) => {
     const nuevas = [...denominaciones];
-    const cantidad = parseInt(value) || 0;
-    nuevas[index].cantidad = cantidad >= 0 ? cantidad : 0;
+    const cantidad = Number.isFinite(+value) ? Math.max(0, parseInt(value)) : 0;
+    nuevas[index].cantidad = cantidad;
     setDenominaciones(nuevas);
   };
 
-  // 🔹 Calcular total efectivo
-  const totalEfectivo = denominaciones.reduce(
-    (acc, d) => acc + d.cantidad * (d.VALOR || d.valor),
-    0
-  );
+  // Total efectivo (a prueba de NaN)
+  const totalEfectivo = denominaciones.reduce((acc, d) => {
+    const val = Number(d.VALOR ?? d.valor ?? 0);
+    const cant = Number(d.cantidad ?? 0);
+    return acc + (isNaN(val) || isNaN(cant) ? 0 : val * cant);
+  }, 0);
 
-  // 🔹 Obtener usuario logueado
+  // Usuario logueado
   const getUsuarioId = () => {
     try {
       const userData =
@@ -78,7 +104,7 @@ const AperturaCaja = () => {
     }
   };
 
-  // 🔹 Validaciones secuenciales
+  // Validaciones
   const validarFormulario = () => {
     const nuevosErrores = { caja: false, turno: false, observaciones: false };
 
@@ -87,21 +113,24 @@ const AperturaCaja = () => {
       setErrors(nuevosErrores);
       return false;
     }
-
     if (!turno) {
       nuevosErrores.turno = true;
       setErrors(nuevosErrores);
       return false;
     }
 
-    const totalCantidad = denominaciones.reduce((acc, d) => acc + d.cantidad, 0);
+    const totalCantidad = denominaciones.reduce(
+      (acc, d) => acc + (d.cantidad || 0),
+      0
+    );
     if (totalCantidad === 0) {
-      toast.error("Debe ingresar denominaciones");
+      toast.error("Debe ingresar al menos una denominación");
       setErrors(nuevosErrores);
       return false;
     }
 
-    const faltantes = denominaciones.filter((d) => d.cantidad === 0).length;
+    const faltantes = denominaciones.filter((d) => (d.cantidad || 0) === 0)
+      .length;
     if (faltantes > 0 && !observaciones.trim()) {
       nuevosErrores.observaciones = true;
       setErrors(nuevosErrores);
@@ -112,7 +141,7 @@ const AperturaCaja = () => {
     return true;
   };
 
-  // 🔹 Apertura de caja (mantenemos confirmación; luego pedimos admin y recién posteamos)
+  // Confirmar apertura (abre modal admin)
   const handleApertura = async () => {
     if (!validarFormulario()) return;
 
@@ -127,16 +156,16 @@ const AperturaCaja = () => {
       text: "Se registrará la apertura con las denominaciones ingresadas",
       confirmButtonText: "Sí, aperturar",
       onConfirm: async () => {
-        // 👇 En vez de postear aquí, armamos payload y abrimos modal de admin
         const payload = {
-          usuario_id: usuarioId,
-          caja_id: caja,
-          turno_id: turno,
+          usuario_id: Number(usuarioId),
+          caja_id: Number(caja),
+          turno_id: Number(turno),
           estado_id: 1,
           observaciones: observaciones.trim() || null,
           denominaciones: denominaciones.map((d) => ({
-            denominacion_id: d.ID_DENOMINACION || d.id_denominacion,
-            cantidad: d.cantidad,
+            denominacion_id:
+              d.ID_DENOMINACION ?? d.id_denominacion ?? d.id ?? null,
+            cantidad: Number(d.cantidad || 0),
           })),
         };
         setPayloadAperturaPendiente(payload);
@@ -145,38 +174,38 @@ const AperturaCaja = () => {
     });
   };
 
-  // 🔹 Cuando el admin verifique OK, recién enviamos la apertura con admin_id
+  // Admin OK → enviar apertura
   const onAdminConfirmado = async (adminInfo) => {
     setShowAdminModal(false);
     if (!payloadAperturaPendiente) return;
 
     setLoading(true);
     try {
-      const res = await axios.post(
-        `${API_BASE}/api/ventas/apertura`,
-        { ...payloadAperturaPendiente, admin_id: adminInfo?.id || null }
-      );
+      const res = await client.post(`/api/ventas/apertura`, {
+        ...payloadAperturaPendiente,
+        admin_id: adminInfo?.id || null,
+      });
 
-      const ticketMsg = res.data.numero_ticket
+      const ticketMsg = res.data?.numero_ticket
         ? ` (Ticket ${res.data.numero_ticket})`
         : "";
       toast.success(
-        res.data.message || `✅ Caja aperturada con éxito${ticketMsg}`
+        res.data?.message || `✅ Caja aperturada con éxito${ticketMsg}`
       );
 
-      // Abrir PDF automáticamente
-      if (res.data.apertura_id) {
+      // Abrir PDF
+      if (res.data?.apertura_id) {
         window.open(
           `${API_BASE}/api/pdf/apertura-caja/${res.data.apertura_id}`,
           "_blank"
         );
       }
 
-      // Resetear formulario
+      // Reset
       setCaja("");
       setTurno("");
       setObservaciones("");
-      setDenominaciones(denominaciones.map((d) => ({ ...d, cantidad: 0 })));
+      setDenominaciones((prev) => prev.map((d) => ({ ...d, cantidad: 0 })));
       setErrors({ caja: false, turno: false, observaciones: false });
       setPayloadAperturaPendiente(null);
     } catch (error) {
@@ -211,8 +240,8 @@ const AperturaCaja = () => {
               >
                 <option value="">Seleccionar caja...</option>
                 {cajas.map((c) => (
-                  <option key={c.ID || c.id} value={c.ID || c.id}>
-                    {c.NOMBRE || c.nombre}
+                  <option key={c.ID ?? c.id} value={c.ID ?? c.id}>
+                    {c.NOMBRE ?? c.nombre}
                   </option>
                 ))}
               </select>
@@ -230,8 +259,8 @@ const AperturaCaja = () => {
               >
                 <option value="">Seleccionar turno...</option>
                 {turnos.map((t) => (
-                  <option key={t.ID || t.id} value={t.ID || t.id}>
-                    {t.NOMBRE || t.nombre}
+                  <option key={t.ID ?? t.id} value={t.ID ?? t.id}>
+                    {t.NOMBRE ?? t.nombre}
                   </option>
                 ))}
               </select>
@@ -258,7 +287,6 @@ const AperturaCaja = () => {
               )}
             </div>
 
-            {/* Botón Apertura */}
             <button
               className="btn-apertura"
               onClick={handleApertura}
@@ -282,23 +310,27 @@ const AperturaCaja = () => {
                 </tr>
               </thead>
               <tbody>
-                {denominaciones.map((d, i) => (
-                  <tr key={d.ID_DENOMINACION || d.id_denominacion || i}>
-                    <td>Q{d.VALOR || d.valor}</td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        className="form-control text-center"
-                        value={d.cantidad}
-                        onChange={(e) => handleCantidadChange(i, e.target.value)}
-                      />
-                    </td>
-                    <td>
-                      Q{(d.cantidad * (d.VALOR || d.valor)).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {denominaciones.map((d, i) => {
+                  const val = Number(d.VALOR ?? d.valor ?? 0);
+                  const cant = Number(d.cantidad ?? 0);
+                  const key =
+                    d.ID_DENOMINACION ?? d.id_denominacion ?? d.id ?? i;
+                  return (
+                    <tr key={key}>
+                      <td>{labelDenom(val)}</td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control text-center"
+                          value={cant}
+                          onChange={(e) => handleCantidadChange(i, e.target.value)}
+                        />
+                      </td>
+                      <td>Q{(val * cant).toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 

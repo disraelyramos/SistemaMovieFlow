@@ -122,6 +122,14 @@ export default function ReservaEvento() {
   const clienteId = useMemo(() => getClienteId(), []);
   const email = useMemo(() => getEmail(), []);
 
+  // Calcular costo basado en duración - CORREGIDO
+  const calcularCosto = useMemo(() => {
+    const dur = Number(duracion);
+    if (dur >= 180) return 4500;
+    if (dur <= 150) return 3500; // Cambiado a <= 150
+    return 0;
+  }, [duracion]);
+
   // Cargar salas
   useEffect(() => {
     (async () => {
@@ -173,6 +181,13 @@ export default function ReservaEvento() {
     if (!n || n < 60) return 'La duración mínima del evento es de 60 minutos.';
     if (!nombre?.trim()) return 'Ingresa tu Nombre y Apellido.';
     if (!celular?.trim()) return 'Ingresa tu Número de celular.';
+    
+    // Validación de celular - debe tener exactamente 8 dígitos
+    const celularLimpio = celular.replace(/\D/g, '');
+    if (celularLimpio.length !== 8) {
+      return 'El número de celular debe tener exactamente 8 dígitos.';
+    }
+    
     if (personas && salaSel && Number(personas) > Number(salaSel.capacidad)) {
       return `La sala seleccionada tiene capacidad máxima de ${salaSel.capacidad} personas.`;
     }
@@ -307,6 +322,21 @@ export default function ReservaEvento() {
               </div>
             </section>
 
+            {/* Mensaje de costos de reserva - CORREGIDO */}
+            <section className="cf-evt-hint" role="note" aria-live="polite" style={{ 
+              margin: '16px 0',
+              borderRadius: '4px',
+              overflow: 'hidden'
+            }}>
+              <div className="cf-evt-hint-inner" style={{ padding: '12px 16px' }}>
+                <strong>💵 Costos de reserva:</strong>
+                <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                  <li>Reservas de 150 minutos o menor: Q3,500</li>
+                  <li>Reservas de 180 minutos o mayor: Q4,500</li>
+                </ul>
+              </div>
+            </section>
+
             <section className="cf-evt-wrap">
               {/* Formulario */}
               <div className="cf-evt-card cf-evt-form" role="form" aria-labelledby="evtFormTitle">
@@ -370,6 +400,11 @@ export default function ReservaEvento() {
                         </option>
                       ))}
                     </select>
+                    {calcularCosto > 0 && (
+                      <small style={{ color: '#1890ff', fontWeight: 'bold' }}>
+                        Costo estimado: Q{calcularCosto.toLocaleString()}
+                      </small>
+                    )}
                   </div>
 
                   <div className="cf-evt-field">
@@ -408,6 +443,7 @@ export default function ReservaEvento() {
                       value={celular}
                       onChange={(e) => setCelular(e.target.value)}
                     />
+                    <small>Debe tener 8 dígitos</small>
                   </div>
 
                   <div className="cf-evt-field cf-evt-field--full">
@@ -449,6 +485,9 @@ export default function ReservaEvento() {
                   <li><strong>Fecha:</strong> {fecha || '—'}</li>
                   <li><strong>Inicio:</strong> {horaInicio || '—'}</li>
                   <li><strong>Duración:</strong> {duracion} min</li>
+                  {calcularCosto > 0 && (
+                    <li><strong>Costo estimado:</strong> Q{calcularCosto.toLocaleString()}</li>
+                  )}
                   <li>
                     <strong>Personas:</strong> {personas || '—'}
                     {salaSel?.capacidad ? ` (máx. ${salaSel.capacidad})` : ''}

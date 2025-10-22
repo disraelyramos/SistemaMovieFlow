@@ -300,44 +300,415 @@ export default function Snacks() {
   };
 
   return (
-    <main className="wc-page" style={{ paddingBottom: 24 }}>
+    <main className="wc-page" style={{ paddingBottom: 24, minHeight: '100vh', overflow: 'visible' }}>
       <style>{`
-        /* Toolbar */
-        .snx-toolbar {
-          display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-          padding: 12px 14px; border:1px solid rgba(255,255,255,.08);
-          border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
-        }
-        .snx-toolbar .spacer { flex:1 }
-
-        /* Grid */
-        .snx-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
-        .snx-item { padding:12px; transition: transform .12s ease, box-shadow .12s ease; }
-        .snx-item:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.25); }
-        .snx-thumb {
-          background: radial-gradient(400px 200px at 50% -20%, #18283c 0%, #0f1d2e 60%, #0b1726 100%);
-          border-radius: 10px; height: 130px; margin-bottom: 10px; overflow: hidden;
-          display:flex; align-items:center; justify-content:center;
+        /* Reset del scroll */
+        html, body, #root, .wc-page {
+          height: auto !important;
+          min-height: 100% !important;
+          overflow: visible !important;
+          overflow-x: hidden !important;
         }
 
-        /* Precio MUY visible */
-        .snx-cta { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
-        .snx-price {
-          font-weight: 900;
-          font-size: 16px;
-          letter-spacing: .2px;
-          padding: 10px 14px;
-          border-radius: 999px;
-          background: linear-gradient(180deg, #ff9d4d, #ff7a1a);
-          color: #fff;
-          text-shadow: 0 1px 0 rgba(0,0,0,.35);
-          border: 1px solid rgba(0,0,0,.25);
-          box-shadow: 0 6px 18px rgba(255,122,26,.25), inset 0 1px 0 rgba(255,255,255,.35);
-          min-width: 92px;
+        /* Estilos principales rediseñados */
+        .snx-hero {
+          background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+          border-radius: 24px;
+          padding: 2rem;
+          margin-bottom: 2rem;
+          border: 1px solid rgba(255,255,255,0.1);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .snx-hero-content {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 2rem;
+        }
+
+        .snx-hero-text h1 {
+          font-size: 2.5rem;
+          font-weight: 800;
+          margin: 0 0 0.5rem 0;
+          background: linear-gradient(135deg, #fff 0%, #fbbf24 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        .snx-hero-text p {
+          font-size: 1.1rem;
+          opacity: 0.9;
+          margin: 0;
+          color: #cbd5e1;
+        }
+
+        .snx-hero-actions {
+          display: flex;
+          gap: 1rem;
+          flex-shrink: 0;
+        }
+
+        /* Tabs rediseñadas */
+        .snx-tabs {
+          display: flex;
+          gap: 0.5rem;
+          background: rgba(255,255,255,0.05);
+          padding: 0.5rem;
+          border-radius: 16px;
+          margin-bottom: 2rem;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .snx-tab {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 12px;
+          background: transparent;
+          color: #cbd5e1;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .snx-tab.active {
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+
+        .snx-tab:hover:not(.active) {
+          background: rgba(255,255,255,0.1);
+          color: white;
+        }
+
+        /* Grid de productos rediseñado */
+        .snx-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1.5rem;
+        }
+
+        .snx-product-card {
+          background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 20px;
+          padding: 1.5rem;
+          transition: all 0.3s ease;
+          backdrop-filter: blur(10px);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .snx-product-card:hover {
+          transform: translateY(-8px);
+          border-color: rgba(245, 158, 11, 0.3);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .snx-product-badge {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .snx-product-image {
+          width: 100%;
+          height: 180px;
+          border-radius: 12px;
+          margin-bottom: 1rem;
+          overflow: hidden;
+          background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .snx-product-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.3s ease;
+        }
+
+        .snx-product-card:hover .snx-product-image img {
+          transform: scale(1.05);
+        }
+
+        .snx-product-name {
+          font-size: 1.25rem;
+          font-weight: 700;
+          margin: 0 0 0.5rem 0;
+          color: white;
+          line-height: 1.3;
+        }
+
+        .snx-product-price {
+          font-size: 1.5rem;
+          font-weight: 800;
+          color: #fbbf24;
+          margin: 0 0 1rem 0;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .snx-product-actions {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .snx-add-btn {
+          flex: 1;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          border: none;
+          color: white;
+          padding: 0.75rem 1.5rem;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .snx-add-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Carrito rediseñado */
+        .snx-cart-sidebar {
+          background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 20px;
+          padding: 1.5rem;
+          height: fit-content;
+          position: sticky;
+          top: 2rem;
+          backdrop-filter: blur(10px);
+        }
+
+        .snx-cart-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 1.5rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .snx-cart-header h3 {
+          margin: 0;
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: white;
+        }
+
+        .snx-cart-icon {
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.25rem;
+        }
+
+        .snx-cart-items {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+          max-height: 400px;
+          overflow-y: auto;
+        }
+
+        .snx-cart-item {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 1rem;
+          background: rgba(255,255,255,0.05);
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .snx-cart-item-info {
+          flex: 1;
+        }
+
+        .snx-cart-item-name {
+          font-weight: 600;
+          color: white;
+          margin: 0 0 0.25rem 0;
+        }
+
+        .snx-cart-item-details {
+          font-size: 0.875rem;
+          opacity: 0.7;
+          margin: 0;
+        }
+
+        .snx-cart-item-controls {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .snx-cart-qty-btn {
+          width: 32px;
+          height: 32px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.1);
+          color: white;
+          border-radius: 8px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .snx-cart-qty-btn:hover {
+          background: rgba(255,255,255,0.2);
+        }
+
+        .snx-cart-qty {
+          min-width: 40px;
           text-align: center;
+          font-weight: 600;
+          color: white;
         }
 
-        /* Modal / Avisos / Toast */
+        .snx-cart-total {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1rem 0;
+          border-top: 1px solid rgba(255,255,255,0.1);
+          margin-bottom: 1.5rem;
+        }
+
+        .snx-cart-total-label {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: white;
+        }
+
+        .snx-cart-total-amount {
+          font-size: 1.5rem;
+          font-weight: 800;
+          color: #fbbf24;
+        }
+
+        .snx-cart-actions {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .snx-clear-btn {
+          flex: 1;
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #ef4444;
+          padding: 0.75rem 1.5rem;
+          border-radius: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .snx-clear-btn:hover {
+          background: rgba(239, 68, 68, 0.3);
+          transform: translateY(-2px);
+        }
+
+        .snx-checkout-btn {
+          flex: 2;
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          border: none;
+          color: white;
+          padding: 0.75rem 1.5rem;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .snx-checkout-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Layout principal */
+        .snx-main-layout {
+          display: grid;
+          grid-template-columns: 1fr 380px;
+          gap: 2rem;
+          align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+          .snx-main-layout {
+            grid-template-columns: 1fr;
+          }
+          
+          .snx-cart-sidebar {
+            position: static;
+          }
+          
+          .snx-hero-content {
+            flex-direction: column;
+            text-align: center;
+          }
+          
+          .snx-hero-actions {
+            justify-content: center;
+          }
+        }
+
+        /* Estados vacíos */
+        .snx-empty-state {
+          text-align: center;
+          padding: 3rem 2rem;
+          color: #64748b;
+        }
+
+        .snx-empty-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .snx-empty-text {
+          font-size: 1.125rem;
+          margin-bottom: 1rem;
+        }
+
+        /* Loading state */
+        .snx-loading {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 3rem;
+          color: #64748b;
+        }
+
+        /* ===== ESTILOS ORIGINALES DEL MODAL (RESTAURADOS) ===== */
         .snx-backdrop {
           position: fixed; inset: 0; display: grid; place-items: center;
           background: color-mix(in oklab, #000 55%, transparent);
@@ -386,50 +757,64 @@ export default function Snacks() {
 
       <section className="wc-section">
         <div className="wc-container">
-          <div className="wc-section-head">
-            <div className="snx-toolbar">
-              <div>
-                <h2 style={{ margin: 0 }}>🍿 Snacks</h2>
-                <p style={{ margin: 0, opacity: .85 }}>Elige tus productos o combos y realiza tu pedido durante una función activa.</p>
+          {/* Hero Section */}
+          <div className="snx-hero">
+            <div className="snx-hero-content">
+              <div className="snx-hero-text">
+                <h1>🍿 Snacks & Combos</h1>
+                <p>Elige tus productos favoritos y disfruta durante la función</p>
               </div>
-              <div className="spacer" />
-              <button className="wc-btn wc-btn-primary" onClick={() => navigate('/welcome-cliente')}>
-                🏠 Inicio
-              </button>
-              <button className="wc-btn" onClick={() => navigate('/mis-pedidos-snacks')}>
-                📒 Ver estado de mis pedidos
-              </button>
+              <div className="snx-hero-actions">
+                <button className="wc-btn wc-btn-ghost" onClick={() => navigate('/welcome-cliente')}>
+                  🏠 Inicio
+                </button>
+                <button className="wc-btn wc-btn-primary" onClick={() => navigate('/mis-pedidos-snacks')}>
+                  📒 Mis Pedidos
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', gap: 8, margin: '14px 0' }}>
+          <div className="snx-tabs">
             {['TODOS', 'PRODUCTOS', 'COMBOS'].map((t) => (
               <button
                 key={t}
-                className={`wc-btn ${tab === t ? 'wc-btn-primary' : 'wc-btn-ghost'}`}
+                className={`snx-tab ${tab === t ? 'active' : ''}`}
                 onClick={() => setTab(t)}
               >
-                {t === 'TODOS' ? 'Todos' : t === 'PRODUCTOS' ? 'Productos' : 'Combos'}
+                {t === 'TODOS' ? '🎯 Todos' : t === 'PRODUCTOS' ? '🥤 Productos' : '🎁 Combos'}
               </button>
             ))}
           </div>
 
-          {/* Grid + Carrito */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 330px', gap: 16 }}>
-            {/* GRID */}
-            <div className="wc-card" style={{ padding: 16, minHeight: 320 }}>
+          {/* Main Content */}
+          <div className="snx-main-layout">
+            {/* Product Grid */}
+            <div>
               {loading ? (
-                <div style={{ padding: 16 }}>Cargando…</div>
+                <div className="snx-loading">
+                  <div>Cargando productos...</div>
+                </div>
               ) : filtered.length === 0 ? (
-                <div style={{ padding: 16, opacity: 0.8 }}>No hay elementos para mostrar.</div>
+                <div className="snx-empty-state">
+                  <div className="snx-empty-icon">🍿</div>
+                  <div className="snx-empty-text">No hay productos disponibles</div>
+                  <button className="wc-btn wc-btn-primary" onClick={() => setTab('TODOS')}>
+                    Ver todos los productos
+                  </button>
+                </div>
               ) : (
                 <div className="snx-grid">
                   {filtered.map((it) => {
                     const candidates = getImgCandidates(it);
                     return (
-                      <article key={`${it.tipo}-${it.id}`} className="wc-card snx-item">
-                        <div className="snx-thumb">
+                      <article key={`${it.tipo}-${it.id}`} className="snx-product-card">
+                        <div className="snx-product-badge">
+                          {it.tipo === 'COMBO' ? 'COMBO' : 'PRODUCTO'}
+                        </div>
+                        
+                        <div className="snx-product-image">
                           {candidates.length > 0 ? (
                             <img
                               src={candidates[0]}
@@ -442,27 +827,26 @@ export default function Snacks() {
                                   e.currentTarget.dataset.idx = String(idx + 1);
                                   e.currentTarget.src = next;
                                 } else {
-                                  // sin más candidatos: ocultar la imagen
                                   e.currentTarget.style.display = 'none';
                                 }
                               }}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             />
                           ) : (
-                            <span style={{ opacity: 0.6 }}>Sin imagen</span>
+                            <span style={{ opacity: 0.5, fontSize: '3rem' }}>
+                              {it.tipo === 'COMBO' ? '🎁' : '🥤'}
+                            </span>
                           )}
                         </div>
-                        <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>
-                          {it.nombre}
-                          <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 6 }}>
-                            {it.tipo === 'COMBO' ? '(Combo)' : ''}
-                          </span>
-                        </h3>
 
-                        {/* Precio destacado + CTA */}
-                        <div className="snx-cta">
-                          <span className="snx-price">{fmtQ(it.precio)}</span>
-                          <button className="wc-btn wc-btn-primary" onClick={() => addToCart(it)}>
+                        <h3 className="snx-product-name">{it.nombre}</h3>
+                        <div className="snx-product-price">{fmtQ(it.precio)}</div>
+
+                        <div className="snx-product-actions">
+                          <button 
+                            className="snx-add-btn" 
+                            onClick={() => addToCart(it)}
+                          >
+                            <span>+</span>
                             Agregar
                           </button>
                         </div>
@@ -473,45 +857,61 @@ export default function Snacks() {
               )}
             </div>
 
-            {/* CARRITO */}
-            <aside className="wc-card" style={{ padding: 16 }}>
-              <h3 style={{ marginTop: 0 }}>🧾 Carrito</h3>
+            {/* Cart Sidebar */}
+            <aside className="snx-cart-sidebar">
+              <div className="snx-cart-header">
+                <div className="snx-cart-icon">🛒</div>
+                <h3>Tu Carrito</h3>
+              </div>
+
               {cart.length === 0 ? (
-                <div style={{ opacity: 0.7 }}>Tu carrito está vacío.</div>
+                <div className="snx-empty-state" style={{padding: '2rem 1rem'}}>
+                  <div className="snx-empty-icon">🛒</div>
+                  <div className="snx-empty-text">Tu carrito está vacío</div>
+                  <small style={{opacity: 0.7}}>Agrega productos para continuar</small>
+                </div>
               ) : (
                 <>
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 10 }}>
+                  <div className="snx-cart-items">
                     {cart.map((it) => (
-                      <li
-                        key={`${it.tipo}-${it.id}`}
-                        style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{it.nombre}</div>
-                          <div style={{ fontSize: 12, opacity: 0.8 }}>
-                            {it.tipo === 'COMBO' ? 'Combo' : 'Producto'} · {fmtQ(it.precio)}
+                      <div key={`${it.tipo}-${it.id}`} className="snx-cart-item">
+                        <div className="snx-cart-item-info">
+                          <div className="snx-cart-item-name">{it.nombre}</div>
+                          <div className="snx-cart-item-details">
+                            {fmtQ(it.precio)} × {it.qty} = {fmtQ(it.precio * it.qty)}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <button className="wc-btn" onClick={() => decQty(it)}>-</button>
-                          <div style={{ minWidth: 24, textAlign: 'center' }}>{it.qty}</div>
-                          <button className="wc-btn" onClick={() => addToCart(it)}>+</button>
+                        <div className="snx-cart-item-controls">
+                          <button 
+                            className="snx-cart-qty-btn" 
+                            onClick={() => decQty(it)}
+                          >
+                            -
+                          </button>
+                          <div className="snx-cart-qty">{it.qty}</div>
+                          <button 
+                            className="snx-cart-qty-btn" 
+                            onClick={() => addToCart(it)}
+                          >
+                            +
+                          </button>
                         </div>
-                      </li>
+                      </div>
                     ))}
-                  </ul>
-
-                  <hr style={{ borderColor: 'rgba(255,255,255,.08)' }} />
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <strong>Total</strong>
-                    <strong>{fmtQ(total)}</strong>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="wc-btn wc-btn-ghost" onClick={clearCart}>Vaciar</button>
-                    <button className="wc-btn wc-btn-primary" style={{ marginLeft: 'auto' }} onClick={openModal}>
-                      Realizar pedido
+                  <div className="snx-cart-total">
+                    <div className="snx-cart-total-label">Total:</div>
+                    <div className="snx-cart-total-amount">{fmtQ(total)}</div>
+                  </div>
+
+                  <div className="snx-cart-actions">
+                    <button className="snx-clear-btn" onClick={clearCart}>
+                      Vaciar
+                    </button>
+                    <button className="snx-checkout-btn" onClick={openModal}>
+                      <span>🎬</span>
+                      Realizar Pedido
                     </button>
                   </div>
                 </>
@@ -521,7 +921,7 @@ export default function Snacks() {
         </div>
       </section>
 
-      {/* ===== MODAL ===== */}
+      {/* ===== MODAL (RESTAURADO A LA VERSIÓN ORIGINAL) ===== */}
       {show && (
         <div role="dialog" aria-modal="true" className="snx-backdrop">
           <div className="snx-modal">

@@ -85,6 +85,33 @@ function salaDisplay(salaNombre, salaId) {
   return `Sala ${salaId}`;
 }
 
+// Estado con colores
+function getEstadoStyles(estado) {
+  const estadoUpper = String(estado).toUpperCase();
+  switch (estadoUpper) {
+    case "PENDIENTE":
+      return {
+        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+        color: "white"
+      };
+    case "ACEPTADO":
+      return {
+        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+        color: "white"
+      };
+    case "ENTREGADO":
+      return {
+        background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+        color: "white"
+      };
+    default:
+      return {
+        background: "rgba(255,255,255,0.1)",
+        color: "#cbd5e1"
+      };
+  }
+}
+
 export default function MisPedidosSnacks() {
   const navigate = useNavigate();
   const [raw, setRaw] = useState([]);
@@ -171,62 +198,378 @@ export default function MisPedidosSnacks() {
     <main className="wc-page">
       <style>{`
         /* ======= FIX DE SCROLL GLOBAL PARA ESTA PÁGINA ======= */
-        html, body {
+        html, body, #root, .wc-page {
           height: auto !important;
-          min-height: 100%;
+          min-height: 100% !important;
           overflow-y: auto !important;
+          overflow-x: hidden !important;
         }
+        
         .wc-page {
-          min-height: 100dvh;
+          min-height: 100vh;
           overflow: visible !important;
         }
-        /* ======= Estilos propios ======= */
-        .mps-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-        .mps-actions { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
-        .pill { font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); }
-        .mps-grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
-        .mps-card { border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 16px; background: rgba(12,18,30,.6); }
-        .mps-row { display:grid; gap:12px; grid-template-columns: 1fr auto; align-items:center; }
-        .mps-meta { display:flex; gap:14px; flex-wrap:wrap; opacity:.85; font-size:13px; }
-        .mps-btns { display:flex; gap:10px; flex-direction:column; align-items:stretch; justify-content:center; }
-        .mps-btns .wc-btn { width: 150px; } /* ancho cómodo; opcional */
-        @media (max-width: 420px) { .mps-row { grid-template-columns: 1fr; } .mps-btns .wc-btn { width: 100%; } }
 
-        /* Filtros de estado */
-        .mps-filters { display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0 18px; }
-        .mps-filters .is-active { box-shadow: 0 0 0 2px rgba(130,100,255,.35) inset; }
+        /* ======= Estilos rediseñados ======= */
+        .mps-hero {
+          background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+          border-radius: 24px;
+          padding: 2rem;
+          margin-bottom: 2rem;
+          border: 1px solid rgba(255,255,255,0.1);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
 
-        /* Toast ligerito */
-        .mps-toast-wrap { position: fixed; top: 18px; left:0; right:0; display:flex; justify-content:center; z-index: 10000; pointer-events:none; }
-        .mps-toast { pointer-events:auto; background: rgba(26,40,24,.92); color:#e8ffe8; border:1px solid rgba(120,200,120,.4); padding:10px 14px; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.4); }
+        .mps-hero-content {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 2rem;
+        }
 
-        /* Confirm modal */
+        .mps-hero-text h1 {
+          font-size: 2.5rem;
+          font-weight: 800;
+          margin: 0 0 0.5rem 0;
+          background: linear-gradient(135deg, #fff 0%, #fbbf24 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        .mps-hero-text p {
+          font-size: 1.1rem;
+          opacity: 0.9;
+          margin: 0;
+          color: #cbd5e1;
+        }
+
+        .mps-hero-stats {
+          display: flex;
+          gap: 1rem;
+          flex-shrink: 0;
+        }
+
+        .mps-stat {
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 12px;
+          padding: 1rem 1.5rem;
+          text-align: center;
+          min-width: 120px;
+        }
+
+        .mps-stat-number {
+          font-size: 1.5rem;
+          font-weight: 800;
+          color: #fbbf24;
+          display: block;
+        }
+
+        .mps-stat-label {
+          font-size: 0.875rem;
+          opacity: 0.8;
+          margin-top: 0.25rem;
+        }
+
+        /* Filtros rediseñados */
+        .mps-filters {
+          display: flex;
+          gap: 0.5rem;
+          background: rgba(255,255,255,0.05);
+          padding: 0.5rem;
+          border-radius: 16px;
+          margin-bottom: 2rem;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .mps-filter {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 12px;
+          background: transparent;
+          color: #cbd5e1;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .mps-filter.active {
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+
+        .mps-filter:hover:not(.active) {
+          background: rgba(255,255,255,0.1);
+          color: white;
+        }
+
+        /* Grid de pedidos rediseñado */
+        .mps-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+          gap: 1.5rem;
+        }
+
+        .mps-card {
+          background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 20px;
+          padding: 1.5rem;
+          transition: all 0.3s ease;
+          backdrop-filter: blur(10px);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .mps-card:hover {
+          transform: translateY(-5px);
+          border-color: rgba(245, 158, 11, 0.3);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .mps-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 1rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .mps-card-title {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: white;
+          margin: 0;
+        }
+
+        .mps-estado {
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .mps-card-body {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .mps-info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
+        .mps-info-item {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .mps-info-label {
+          font-size: 0.875rem;
+          opacity: 0.7;
+          color: #cbd5e1;
+        }
+
+        .mps-info-value {
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+        }
+
+        .mps-total {
+          font-size: 1.25rem;
+          font-weight: 800;
+          color: #fbbf24;
+          text-align: center;
+          padding: 1rem 0;
+          border-top: 1px solid rgba(255,255,255,0.1);
+          margin-top: 0.5rem;
+        }
+
+        .mps-card-actions {
+          display: flex;
+          gap: 0.75rem;
+          margin-top: 1rem;
+        }
+
+        .mps-btn {
+          flex: 1;
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .mps-btn-primary {
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          color: white;
+        }
+
+        .mps-btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .mps-btn-danger {
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #ef4444;
+        }
+
+        .mps-btn-danger:hover {
+          background: rgba(239, 68, 68, 0.3);
+          transform: translateY(-2px);
+        }
+
+        /* Estados vacíos */
+        .mps-empty-state {
+          text-align: center;
+          padding: 4rem 2rem;
+          color: #64748b;
+          grid-column: 1 / -1;
+        }
+
+        .mps-empty-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .mps-empty-text {
+          font-size: 1.125rem;
+          margin-bottom: 1.5rem;
+        }
+
+        /* Loading state */
+        .mps-loading {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 4rem;
+          color: #64748b;
+          grid-column: 1 / -1;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+          .mps-hero-content {
+            flex-direction: column;
+            text-align: center;
+          }
+          
+          .mps-hero-stats {
+            justify-content: center;
+          }
+          
+          .mps-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .mps-info-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .mps-card-actions {
+            flex-direction: column;
+          }
+        }
+
+        /* Toast mejorado */
+        .mps-toast-wrap { 
+          position: fixed; 
+          top: 20px; 
+          left: 50%; 
+          transform: translateX(-50%);
+          z-index: 10000; 
+          pointer-events: none; 
+        }
+        
+        .mps-toast { 
+          pointer-events: auto; 
+          background: linear-gradient(135deg, #059669 0%, #047857 100%);
+          color: white; 
+          padding: 1rem 1.5rem; 
+          border-radius: 12px; 
+          box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.2);
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        /* Confirm modal mejorado */
         .mps-backdrop {
-          position: fixed; inset: 0; display: grid; place-items: center;
-          background: color-mix(in oklab, #000 55%, transparent);
-          backdrop-filter: blur(4px);
+          position: fixed; 
+          inset: 0; 
+          display: grid; 
+          place-items: center;
+          background: rgba(0,0,0,0.8);
+          backdrop-filter: blur(8px);
           z-index: 10000;
           animation: mpsFade .18s ease-out;
         }
+        
         @keyframes mpsFade { from { opacity: 0 } to { opacity: 1 } }
+        
         .mps-dialog {
-          width: min(520px, 92vw);
-          border-radius: 16px;
+          width: min(480px, 92vw);
+          border-radius: 20px;
           overflow: hidden;
-          background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
-          border: 1px solid rgba(255,255,255,.08);
-          box-shadow: 0 22px 68px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+          background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+          border: 1px solid rgba(255,255,255,0.1);
+          box-shadow: 0 32px 64px rgba(0,0,0,0.5);
         }
-        .mps-dialog-head { padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,.06); }
-        .mps-dialog-title { margin:0; font-size:18px; font-weight:700; }
-        .mps-dialog-body { padding: 16px 18px; }
-        .mps-dialog-actions { display:flex; justify-content:flex-end; gap:10px; padding: 12px 18px; border-top:1px solid rgba(255,255,255,.06); }
+        
+        .mps-dialog-head { 
+          padding: 1.5rem; 
+          border-bottom: 1px solid rgba(255,255,255,0.1); 
+          background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+        }
+        
+        .mps-dialog-title { 
+          margin: 0; 
+          font-size: 1.25rem; 
+          font-weight: 700; 
+          color: white;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .mps-dialog-body { 
+          padding: 1.5rem; 
+        }
+        
+        .mps-dialog-actions { 
+          display: flex; 
+          justify-content: flex-end; 
+          gap: 1rem; 
+          padding: 1.5rem; 
+          border-top: 1px solid rgba(255,255,255,0.1); 
+        }
       `}</style>
 
-      {/* Toast de “Pedido eliminado” */}
+      {/* Toast de "Pedido eliminado" */}
       {toast?.msg && (
         <div className="mps-toast-wrap">
-          <div className="mps-toast">{toast.msg}</div>
+          <div className="mps-toast">
+            <span>✅</span>
+            {toast.msg}
+          </div>
         </div>
       )}
 
@@ -235,13 +578,15 @@ export default function MisPedidosSnacks() {
         <div className="mps-backdrop" role="dialog" aria-modal="true" onClick={cerrarConfirm}>
           <div className="mps-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="mps-dialog-head">
-              <h3 className="mps-dialog-title">🗑 {confirmBox.titulo}</h3>
+              <h3 className="mps-dialog-title">🗑️ {confirmBox.titulo}</h3>
             </div>
             <div className="mps-dialog-body">
-              <p style={{ margin: 0 }}>{confirmBox.mensaje}</p>
+              <p style={{ margin: 0, color: '#cbd5e1', fontSize: '1rem' }}>{confirmBox.mensaje}</p>
             </div>
             <div className="mps-dialog-actions">
-              <button className="wc-btn wc-btn-ghost" onClick={cerrarConfirm}>No, volver</button>
+              <button className="wc-btn wc-btn-ghost" onClick={cerrarConfirm}>
+                No, volver
+              </button>
               <button className="wc-btn wc-btn-primary" onClick={confirmarCancelacion}>
                 Sí, cancelar
               </button>
@@ -252,33 +597,39 @@ export default function MisPedidosSnacks() {
 
       <section className="wc-section">
         <div className="wc-container">
-          <div className="wc-section-head mps-head">
-            <div>
-              <h2 style={{ marginBottom: 4 }}>📒 Mis pedidos de snacks</h2>
-              <p style={{ margin: 0, opacity: 0.85 }}>
-                Revisa el estado y vuelve a abrir tu comprobante.
-              </p>
-            </div>
-            <div className="mps-actions">
-              <button className="wc-btn wc-btn-primary" onClick={() => navigate("/snacks")}>
-                🛒 Realizar pedido
-              </button>
-              <span className="pill">Total: {items.length}</span>
-              <button className="wc-btn" onClick={load}>Actualizar</button>
+          {/* Hero Section */}
+          <div className="mps-hero">
+            <div className="mps-hero-content">
+              <div className="mps-hero-text">
+                <h1>📒 Mis Pedidos de Snacks</h1>
+                <p>Revisa el estado y vuelve a abrir tu comprobante</p>
+              </div>
+              <div className="mps-hero-stats">
+                <div className="mps-stat">
+                  <span className="mps-stat-number">{items.length}</span>
+                  <span className="mps-stat-label">Total</span>
+                </div>
+                <button className="wc-btn wc-btn-primary" onClick={() => navigate("/snacks")}>
+                  🛒 Realizar Pedido
+                </button>
+                <button className="wc-btn wc-btn-ghost" onClick={load}>
+                  🔄 Actualizar
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Filtros de estado */}
           <div className="mps-filters">
             {[
-              ["TODOS", "Todos"],
-              ["PENDIENTE", "Pendientes"],
-              ["ACEPTADO", "Aceptados"],
-              ["ENTREGADO", "Entregados"],
+              ["TODOS", "🎯 Todos"],
+              ["PENDIENTE", "⏳ Pendientes"],
+              ["ACEPTADO", "✅ Aceptados"],
+              ["ENTREGADO", "📦 Entregados"],
             ].map(([key, label]) => (
               <button
                 key={key}
-                className={`wc-btn ${filtro === key ? "is-active" : ""}`}
+                className={`mps-filter ${filtro === key ? "active" : ""}`}
                 onClick={() => setFiltro(key)}
               >
                 {label}
@@ -286,42 +637,93 @@ export default function MisPedidosSnacks() {
             ))}
           </div>
 
+          {/* Grid de pedidos */}
           <div className="mps-grid">
             {loading ? (
-              <div className="mps-card">Cargando…</div>
+              <div className="mps-loading">
+                <div>Cargando pedidos...</div>
+              </div>
             ) : visibles.length === 0 ? (
-              <div className="mps-card" style={{ opacity: 0.8 }}>
-                No hay pedidos para el filtro seleccionado.
+              <div className="mps-empty-state">
+                <div className="mps-empty-icon">📦</div>
+                <div className="mps-empty-text">
+                  {filtro === "TODOS" 
+                    ? "Aún no tienes pedidos de snacks" 
+                    : `No hay pedidos ${filtro.toLowerCase()}`
+                  }
+                </div>
+                {filtro !== "TODOS" && (
+                  <button 
+                    className="wc-btn wc-btn-primary" 
+                    onClick={() => setFiltro("TODOS")}
+                  >
+                    Ver todos los pedidos
+                  </button>
+                )}
               </div>
             ) : (
-              visibles.map((p) => (
-                <article key={`${p.id ?? Math.random()}`} className="mps-card">
-                  <div className="mps-row">
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <strong style={{ fontSize: 16 }}>Pedido #{p.id ?? "—"}</strong>
-                        <span className="pill">{p.estado}</span>
-                      </div>
-                      <div className="mps-meta">
-                        <span>{salaDisplay(p.salaNombre, p.salaId)}</span>
-                        <span>Asiento {p.asiento ?? "—"}</span>
-                        <span>Total {fmtQ(p.total)}</span>
-                        {p.creado && <span>{String(p.creado).replace("T", " ").slice(0, 16)}</span>}
+              visibles.map((p) => {
+                const estadoStyles = getEstadoStyles(p.estado);
+                return (
+                  <article key={`${p.id ?? Math.random()}`} className="mps-card">
+                    <div className="mps-card-header">
+                      <h3 className="mps-card-title">Pedido #{p.id ?? "—"}</h3>
+                      <div 
+                        className="mps-estado"
+                        style={estadoStyles}
+                      >
+                        {p.estado}
                       </div>
                     </div>
-                    <div className="mps-btns">
-                      <button className="wc-btn" onClick={() => openPdf(p.id)}>
-                        Ver PDF
-                      </button>
-                      {String(p.estado).toUpperCase() === "PENDIENTE" && (
-                        <button className="wc-btn" onClick={() => pedirConfirmacionCancel(p)}>
-                          Cancelar pedido
+
+                    <div className="mps-card-body">
+                      <div className="mps-info-grid">
+                        <div className="mps-info-item">
+                          <span className="mps-info-label">Sala</span>
+                          <span className="mps-info-value">
+                            {salaDisplay(p.salaNombre, p.salaId)}
+                          </span>
+                        </div>
+                        <div className="mps-info-item">
+                          <span className="mps-info-label">Asiento</span>
+                          <span className="mps-info-value">{p.asiento ?? "—"}</span>
+                        </div>
+                        <div className="mps-info-item">
+                          <span className="mps-info-label">Fecha</span>
+                          <span className="mps-info-value">
+                            {p.creado ? String(p.creado).replace("T", " ").slice(0, 16) : "—"}
+                          </span>
+                        </div>
+                        <div className="mps-info-item">
+                          <span className="mps-info-label">Efectivo</span>
+                          <span className="mps-info-value">{fmtQ(p.efectivo)}</span>
+                        </div>
+                      </div>
+
+                      <div className="mps-total">
+                        Total: {fmtQ(p.total)}
+                      </div>
+
+                      <div className="mps-card-actions">
+                        <button 
+                          className="mps-btn mps-btn-primary" 
+                          onClick={() => openPdf(p.id)}
+                        >
+                          📄 Ver PDF
                         </button>
-                      )}
+                        {String(p.estado).toUpperCase() === "PENDIENTE" && (
+                          <button 
+                            className="mps-btn mps-btn-danger" 
+                            onClick={() => pedirConfirmacionCancel(p)}
+                          >
+                            🗑️ Cancelar
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))
+                  </article>
+                );
+              })
             )}
           </div>
         </div>

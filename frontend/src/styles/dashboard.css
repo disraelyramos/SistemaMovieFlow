@@ -12,17 +12,28 @@
   --topbar-h: 68px;
 }
 
+/* Scroll global del documento */
+html, body {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto; /* el body scrollea */
+}
+
 .dashboard-container {
   display: flex;
-  height: 100vh;
+  align-items: flex-start;          /* 👈 asegura alineación correcta con topbar fijo */
+  min-height: 100vh;
+  height: auto;
   width: 100vw;
-  overflow: hidden;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: var(--color-fondo);
+  overflow: visible;                /* 👈 el body hará el scroll */
 }
 
 /* ================= Sidebar ================= */
 .sidebar {
+  position: sticky;                 /* 👈 se “pega” al top */
+  top: 0;
+  height: 100vh;                    /* 👈 ocupa toda la pantalla */
+  overflow: auto;                   /* 👈 scroll interno del menú si es necesario */
   width: var(--sidebar-w);
   min-width: var(--sidebar-w);
   background: var(--color-sidebar-fondo);
@@ -33,9 +44,7 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  position: relative;
-  z-index: 2; /* Encima de la topbar para cubrir cualquier borde */
+  z-index: 2;
 }
 
 .sidebar h3 {
@@ -89,12 +98,14 @@
 .main-content {
   flex-grow: 1;
   padding: 30px;
-  overflow-y: auto;
-  margin-top: var(--topbar-h);
+  padding-top: calc(var(--topbar-h) + 16px) !important; /* deja espacio real bajo el topbar */
+  overflow: visible;                                     /* que scrollee el body, no aquí */
   transition: none;
-  background: linear-gradient(to bottom, #f9f9f9, #ececec);
-  min-height: 100vh;
+  background: #ffffff; 
+  min-height: calc(100vh - var(--topbar-h));
 }
+
+
 
 /* Placeholders comunes */
 .content-placeholder {
@@ -275,3 +286,211 @@
   color: #111827;
   border: 1px solid #e5e7eb;
 }
+
+/*para lo textos de los formularios */
+/* ===== FIX: texto de formularios no visible (modales y vistas) ===== */
+
+/* Color base legible dentro del contenido y modales */
+.main-content,
+.modal,
+.modal-content {
+  color: #0f172a !important; /* slate-900 */
+}
+
+/* Labels (incluye form-check) */
+.main-content label,
+.modal-content label,
+label.form-label,
+.form-check-label {
+  color: #0f172a !important;
+}
+
+/* Campos: inputs, textarea y selects */
+.main-content .form-control,
+.main-content .form-select,
+.modal-content .form-control,
+.modal-content .form-select,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="file"],
+textarea,
+select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;  /* slate-200 */
+}
+
+/* Placeholders */
+.main-content .form-control::placeholder,
+.modal-content .form-control::placeholder,
+textarea::placeholder,
+input::placeholder {
+  color: #64748b !important;          /* slate-500 */
+  opacity: 1 !important;
+}
+
+/* Opciones del select al desplegar */
+.form-select option,
+select option {
+  color: #0f172a !important;
+  background: #ffffff !important;
+}
+
+/* Focus accesible */
+.form-control:focus,
+.form-select:focus,
+textarea:focus,
+input:focus,
+select:focus {
+  border-color: #3b82f6 !important;   /* azul */
+  box-shadow: 0 0 0 .2rem rgba(59,130,246,.25) !important;
+  outline: none !important;
+}
+
+/* Estados disabled/read-only */
+.form-control[disabled],
+.form-control:disabled,
+.form-select[disabled],
+.form-select:disabled,
+input[disabled],
+select[disabled],
+textarea[disabled] {
+  background-color: #f8fafc !important; /* slate-50 */
+  color: #475569 !important;            /* slate-600 */
+}
+
+/* Autofill de Chrome (para que no ponga texto amarillo) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: #0f172a !important;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
+/* Dropdowns dentro de modales (selects estilizados, menus) */
+.dropdown-menu,
+.select-dropdown,
+.modal-content .dropdown-menu {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+}
+.dropdown-item { color: #0f172a !important; }
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: #f1f5f9 !important;     /* slate-100 */
+  color: #0f172a !important;
+}
+
+/*Arreglo del Dashboard*/
+
+html, body{
+  height: 100%;
+  overflow: hidden !important;
+  background: #ffffff;          /* evita doble scrollbar */
+}
+
+.dashboard-container{
+  height: 100dvh !important;            /* ocupa toda la ventana */
+  overflow-y: auto !important;          /* aquí está el scroll */
+  overflow-x: hidden;
+  align-items: stretch !important;      /* evita saltos con sticky */
+  background: #ffffff;
+}
+
+/* para las cartillas de las peliculas */
+/* ====== Películas – Grid limpio y tarjetas uniformes ====== */
+
+/* La col de Bootstrap ya iguala el ancho; hacemos iguales las alturas internas */
+.p-card{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 14px;
+  overflow: hidden;                 /* oculta zoom del poster en hover */
+}
+
+/* Póster con proporción fija 2:3 para TODAS las tarjetas */
+.p-media{
+  position: relative;
+  aspect-ratio: 2 / 3;              /* <-- clave: todas las portadas misma altura */
+  width: 100%;
+  background: #f3f4f6;
+  overflow: hidden;
+}
+.p-media img{
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform .25s ease;
+}
+.p-card:hover .p-media img{ transform: scale(1.02); }
+
+/* Cuerpo con layout de columna y espacio para los botones fijos */
+.p-card .card-body{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  padding-top: 12px;
+  padding-bottom: 48px;             /* deja lugar para .p-actions fijas */
+}
+
+/* Título en 2 líneas máx. para que no rompa alturas */
+.p-title{
+  margin: 0;
+  font-weight: 800;
+  line-height: 1.2;
+
+  /* Clamp estándar + WebKit */
+  line-clamp: 2;            /* estándar */
+  display: -webkit-box;     /* requerido por la variante WebKit */
+  -webkit-line-clamp: 2;    /* prefijo WebKit */
+  -webkit-box-orient: vertical;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* Chips y metadatos compactos */
+.chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chip{ font-size: 12px; padding: 4px 8px; border-radius: 999px; }
+.p-meta{ color:#6b7280; font-size:.92rem; }
+
+/* Estado y acciones siempre en el mismo lugar */
+.p-status{ font-size: 12px; padding:4px 8px; border-radius: 999px; }
+.p-status--active{ background:#e8f7ee; color:#157347; }
+.p-status--warn{ background:#fff4e5; color:#b45309; }
+
+/* Botones de editar/eliminar anclados abajo-derecha, iguales en todas */
+.p-actions{
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+}
+.p-actions .btn{ padding: 6px 8px; line-height: 1; }
+
+/* Gaps consistentes entre tarjetas (por si no usas .g-4) */
+.row.row-cols-1.row-cols-md-2.row-cols-lg-3{ row-gap: 1.25rem; }
+
+/* Responsivo: poster un poco más compacto en pantallas angostas */
+@media (max-width: 576px){
+  .p-media{ aspect-ratio: 3 / 4; }   /* un pelín más alto en móvil si te gusta */
+}
+
+/* === Texto blanco SOLO en las tarjetas KPI del dashboard === */
+.kpi-grid .kpi-card,
+.kpi-grid .kpi-card :is(h1,h2,h3,h4,h5,h6,p,span,small,strong,.card-title,.kpi-number),
+.kpi-grid .kpi-card a {
+  color: #fff !important;
+}
+

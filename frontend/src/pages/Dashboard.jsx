@@ -22,7 +22,6 @@ import HistorialReservas from './HistorialReservas';
 import ReservasDelDia from './ReservasDelDia';
 import SolicitudesReservas from './SolicitudesReservas';
 import SnacksCaja from './SnacksCaja';
-import ReportesVentasDeBoletos from './ReportesVentasDeBoletos';
 
 // ====== Vistas IBER ======
 import CrearNuevaVenta from "../pages/vista personal de ventas/CrearNuevaVenta";
@@ -33,12 +32,16 @@ import NuevoCombo from "../pages/Combos/NuevoCombo";
 import lotes from './Lotes';
 import Reportes_de_Sala from "../pages/graficas_reportes/Reportes_de_Sala";
 import ReporteventasCategoria from "../pages/graficas_reportes/ReporteventasCategoria";
+import ReportesVentasDeBoletos from './ReportesVentasDeBoletos';
 
 import '../styles/dashboard.css';
 
 /* ====== NUEVAS IMPORTACIONES (funcionalidades extraídas) ====== */
 import ReservaConfirmada from './reservaConfirmada';
 import DasboarddeGraficas from './DasboarddeGraficas';
+import PagoReservas from './PagoReservas';
+import ReportesEventos from "./graficas_reportes/ReportesEventos";
+
 
 /* ================== API BASE ================== */
 const API_BASE =
@@ -138,9 +141,13 @@ const Dashboard = () => {
     historial_venta_de_entradas: HistorialVentaEntradas,
     reportes_de_sala: Reportes_de_Sala,
     ventas_por_categoria: ReporteventasCategoria,
-    ventas_de_boletos: ReportesVentasDeBoletos,
-
+    reportes_de_eventos: ReportesEventos,
+      // Nuevo submódulo
+    pago_de_reservas: PagoReservas,
+  // Fallback por route '/caja/pago-reservas' -> keyfy => 'cajapagoreservas'
+    cajapagoreservas: PagoReservas,
     // ❌ Se mantienen fuera las claves relacionadas con dashboarddecategorias.
+    ventas_de_boletos: ReportesVentasDeBoletos,
   };
 
   const resolveSubmoduleComponent = (sub) =>
@@ -175,7 +182,7 @@ const Dashboard = () => {
         }}
         title="Tipo de cambio de referencia del Banguat"
       >
-        <strong>Cambio de dólares a quetzales:</strong>
+        <strong>USD - GTQ:</strong>
         <span>{tc.loading ? 'Cargando…' : (tc.ref ? `Q ${tc.ref}` : 'No disponible')}</span>
       </div>
 

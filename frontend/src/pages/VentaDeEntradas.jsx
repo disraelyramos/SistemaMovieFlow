@@ -1,7 +1,7 @@
 // src/pages/VentaDeEntradas.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import '../styles/dashboard.css'; // usamos el look & feel del admin
+import '../styles/dashboard.css';
 
 /* ================== API BASE ================== */
 const API_BASE =
@@ -29,14 +29,12 @@ const post = (path, body, cfg = {}) =>
   });
 
 /* ================== Utils ================== */
-// antes: es-PE / PEN
 const currency = (v = 0) =>
   Number(v || 0).toLocaleString('es-GT', {
     style: 'currency',
     currency: 'GTQ',
     minimumFractionDigits: 2,
   });
-
 
 const diasAbbr = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -112,9 +110,15 @@ export default function VentaDeEntradas() {
   const [seats, setSeats] = useState([]);
   const [seleccionados, setSeleccionados] = useState([]);
 
+  // reservas
+  const [reservas, setReservas] = useState([]);
+
   // venta
-  const [metodoPago, setMetodoPago] = useState('');
+  const [metodoPago, setMetodoPago] = useState('EFECTIVO');
   const [submitting, setSubmitting] = useState(false);
+
+  // modal
+  const [modalOpen, setModalOpen] = useState(false);
 
   // cargar películas (vista empleado)
   useEffect(() => {
@@ -163,12 +167,23 @@ export default function VentaDeEntradas() {
     }
   };
 
+  // reservas: listar para la función
+  const cargarReservas = async (funcionId) => {
+    try {
+      const { data } = await get(`/api/empleado/funciones/${funcionId}/reservas`);
+      setReservas(Array.isArray(data) ? data : []);
+    } catch {
+      setReservas([]);
+    }
+  };
+
   const abrirFunciones = async (pelicula) => {
     setPeliculaSel(pelicula);
     setFuncionSel(null);
     setSeats([]);
     setSeleccionados([]);
-    setMetodoPago('');
+    setReservas([]);
+    setMetodoPago('EFECTIVO');
     try {
       const { data } = await get(`/api/empleado/cartelera/${pelicula.id}/funciones`);
       setFunciones(Array.isArray(data) ? data.map(normFuncion) : []);
@@ -177,14 +192,17 @@ export default function VentaDeEntradas() {
     }
   };
 
-  const seleccionarFuncion = async (f) => {
+  const abrirModalAsientos = async (f) => {
     setFuncionSel(f);
     setSeleccionados([]);
-    setMetodoPago('');
+    setReservas([]);
+    setMetodoPago('EFECTIVO');
     try {
       await post(`/api/empleado/funciones/${f.id}/liberar-reservas-vencidas`, {});
     } catch {}
     await cargarAsientos(f.id);
+    await cargarReservas(f.id);
+    setModalOpen(true);
   };
 
   const filas = useMemo(() => Array.from(new Set(seats.map((s) => s.fila))), [seats]);
@@ -194,7 +212,7 @@ export default function VentaDeEntradas() {
     return m || 10;
   }, [seats]);
 
-  // permitir seleccionar RESERVADO, prohibir VENDIDO/BLOQUEADO
+  // permitir seleccionar RESERVADO, prohibir VENDIDO/BLOQUEADO reales
   const toggleSeat = (s) => {
     const esVendido = s.estado === 'VENDIDO';
     const esBloqueadoReal = s.estado === 'BLOQUEADO';
@@ -211,19 +229,25 @@ export default function VentaDeEntradas() {
   const precioUnit = Number(funcionSel?.precio || 0);
   const total = precioUnit * seleccionados.length;
 
-  const confirmarAccion = async () => {
+  // vender en taquilla y abrir tickets
+  const confirmarVenta = async () => {
     if (!funcionSel || selectedSeatIds.length === 0) return;
-    if (!metodoPago) { alert('Selecciona un método de pago'); return; }
     setSubmitting(true);
     try {
-      await post(`/api/empleado/funciones/${funcionSel.id}/vender`, {
+      const r = await post(`/api/empleado/funciones/${funcionSel.id}/vender`, {
         asientos: selectedSeatIds,
-        metodoPago,
+        metodoPago: 'EFECTIVO',
       });
       alert('¡Venta registrada! Asientos vendidos.');
+      try {
+        const compraId = r?.data?.compraIdNueva;
+        if (compraId) {
+          window.open(`${API_BASE}/api/empleado/tickets/compra/${compraId}`, '_blank');
+        }
+      } catch {}
       await cargarAsientos(funcionSel.id);
+      await cargarReservas(funcionSel.id);
       setSeleccionados([]);
-      setMetodoPago('');
     } catch (e) {
       console.error('Confirmar venta ->', e);
       alert('Error al confirmar la venta.');
@@ -235,266 +259,1166 @@ export default function VentaDeEntradas() {
   const imgUrl = (p) => (p.poster && !p.poster.startsWith('http') ? `${API_BASE}${p.poster}` : p.poster);
 
   return (
-    <div className="card">
-      <div className="card-header">
-        <span className="emoji">🎫</span>
-        <h3 className="card-title m-0">Venta de Entradas</h3>
-        <div className="card-subtitle">Vista para empleados</div>
-      </div>
-
-      {/* Toolbar de búsqueda */}
-      <div className="toolbar" style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-        <input
-          type="text"
-          className="input"
-          placeholder="Buscar película..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{ flex: 1, minWidth: 220 }}
-        />
-        <select className="select" value={cat} onChange={(e) => setCat(e.target.value)}>
-          {categorias.map((c) => (
-            <option key={c} value={c}>{c === 'ALL' ? 'Todas las categorías' : c}</option>
-          ))}
-        </select>
-        <button className="btn">Buscar</button>
-      </div>
-
-      {/* Layout admin en 3 paneles */}
-      <div className="admin-venta-grid">
-        {/* Panel 1: Películas */}
-        <section className="pane">
-          <div className="pane-title">Películas ({listFiltrada.length})</div>
-          <div className="movie-list">
-            {listFiltrada.length === 0 && <div className="muted">No hay películas activas que coincidan.</div>}
-            {listFiltrada.map((p) => (
-              <div key={p.id} className={`movie-row ${peliculaSel?.id === p.id ? 'active' : ''}`}>
-                <div className="movie-thumb" style={{ backgroundImage: imgUrl(p) ? `url('${imgUrl(p)}')` : 'none' }} />
-                <div className="movie-meta">
-                  <div className="movie-title">{p.titulo}</div>
-                  <div className="movie-sub">
-                    ⏱️ {p.duracion ?? '--'} min {p.genero ? `· ${p.genero}` : ''} {p.idioma ? `· ${p.idioma}` : ''}
-                  </div>
-                </div>
-                <button className="btn-sm" onClick={() => abrirFunciones(p)}>Ver funciones</button>
-              </div>
-            ))}
+    <div className="venta-entradas-container">
+      {/* Header */}
+      <div className="venta-header">
+        <div className="header-content">
+          <div className="header-icon">🎫</div>
+          <div className="header-text">
+            <h1 className="header-title">Venta de Entradas</h1>
+            <p className="header-subtitle">Panel de control para empleados</p>
           </div>
-        </section>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="search-section">
+        <div className="search-container">
+          <div className="search-input-group">
+            <div className="search-icon">🔍</div>
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Buscar película por título..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <select className="category-select" value={cat} onChange={(e) => setCat(e.target.value)}>
+            {categorias.map((c) => (
+              <option key={c} value={c}>{c === 'ALL' ? 'Todas las categorías' : c}</option>
+            ))}
+          </select>
+          <button className="search-btn">
+            <span className="btn-icon">🔍</span>
+            Buscar
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Grid - Solo 2 secciones */}
+      <div className="venta-grid">
+        {/* Panel 1: Películas */}
+        <div className="panel movies-panel">
+          <div className="panel-header">
+            <h3 className="panel-title">Películas Disponibles</h3>
+            <span className="panel-count">{listFiltrada.length}</span>
+          </div>
+          <div className="panel-content">
+            {listFiltrada.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">🎭</div>
+                <p className="empty-text">No hay películas activas que coincidan</p>
+              </div>
+            ) : (
+              <div className="movies-grid">
+                {listFiltrada.map((p) => (
+                  <div 
+                    key={p.id} 
+                    className={`movie-card ${peliculaSel?.id === p.id ? 'active' : ''}`}
+                    onClick={() => abrirFunciones(p)}
+                  >
+                    <div 
+                      className="movie-poster"
+                      style={{ backgroundImage: imgUrl(p) ? `url('${imgUrl(p)}')` : 'none' }}
+                    >
+                      {!imgUrl(p) && <div className="poster-placeholder">🎬</div>}
+                    </div>
+                    <div className="movie-info">
+                      <h4 className="movie-title">{p.titulo}</h4>
+                      <div className="movie-details">
+                        <span className="detail-item">⏱️ {p.duracion ?? '--'} min</span>
+                        {p.genero && <span className="detail-item">🎭 {p.genero}</span>}
+                        {p.idioma && <span className="detail-item">🗣️ {p.idioma}</span>}
+                      </div>
+                    </div>
+                    <div className="movie-action">
+                      <span className="action-indicator">→</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Panel 2: Funciones */}
-        <section className="pane">
-          <div className="pane-title">
-            Funciones {peliculaSel ? `— ${peliculaSel.titulo}` : ''}
+        <div className="panel functions-panel">
+          <div className="panel-header">
+            <h3 className="panel-title">
+              Funciones {peliculaSel && `- ${peliculaSel.titulo}`}
+            </h3>
           </div>
-          {peliculaSel == null && <div className="muted">Selecciona una película para listar funciones.</div>}
-          {peliculaSel != null && funciones.length === 0 && <div className="muted">No hay funciones activas.</div>}
-          <div className="funciones-list">
-            {funciones.map((f) => {
-              const disabled = !!f.soldOut;
-              const active = funcionSel?.id === f.id;
-              return (
-                <button
-                  key={f.id}
-                  className={`funcion-row ${active ? 'selected' : ''}`}
-                  onClick={() => !disabled && seleccionarFuncion(f)}
-                  title={disabled ? 'Función agotada' : 'Seleccionar función'}
-                  disabled={disabled}
-                >
-                  <div className="funcion-left">
-                    <div className="funcion-row-1">
-                      <b>{f.horaInicio}</b>
-                      {f.formato && <span className="badge">{f.formato}</span>}
-                      {disabled && <span className="badge danger">AGOTADA</span>}
+          <div className="panel-content">
+            {peliculaSel == null ? (
+              <div className="empty-state">
+                <div className="empty-icon">📅</div>
+                <p className="empty-text">Selecciona una película para ver funciones</p>
+              </div>
+            ) : funciones.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">❌</div>
+                <p className="empty-text">No hay funciones activas para esta película</p>
+              </div>
+            ) : (
+              <div className="functions-list">
+                {funciones.map((f) => {
+                  const disabled = !!f.soldOut;
+                  return (
+                    <div
+                      key={f.id}
+                      className={`function-card ${disabled ? 'sold-out' : ''}`}
+                      onClick={() => !disabled && abrirModalAsientos(f)}
+                    >
+                      <div className="function-time">
+                        <div className="time-badge">{f.horaInicio}</div>
+                        {f.formato && <span className="format-badge">{f.formato}</span>}
+                      </div>
+                      <div className="function-details">
+                        <div className="function-location">
+                          <span className="location-icon">📍</span>
+                          {f.salaNombre}
+                        </div>
+                        <div className="function-date">{formatFechaCorta(f.fecha)}</div>
+                        <div className="function-stats">
+                          <span className="stat">Vendidos: {f.vendidos}</span>
+                          <span className="stat">Disponibles: {f.disponibles}</span>
+                        </div>
+                      </div>
+                      <div className="function-price">
+                        <div className="price-amount">{currency(f.precio)}</div>
+                        {disabled && <div className="sold-out-badge">AGOTADO</div>}
+                        {!disabled && <div className="select-btn">Seleccionar</div>}
+                      </div>
                     </div>
-                    <div className="funcion-row-2">
-                      📍 {f.salaNombre} · {formatFechaCorta(f.fecha)} ·
-                      &nbsp;Vendidos: {f.vendidos} · Disp: {f.disponibles}
-                    </div>
-                  </div>
-                  <div className="funcion-price">{currency(f.precio)}</div>
-                </button>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </section>
-
-        {/* Panel 3: Asientos + Resumen */}
-        <section className="pane">
-          <div className="pane-title">Asientos y cobro</div>
-
-          {!funcionSel && <div className="muted">Elige una función para gestionar asientos.</div>}
-
-          {funcionSel && (
-            <>
-              {loadingSeats && <div className="muted" style={{ marginBottom: 8 }}>Cargando asientos…</div>}
-
-              {!loadingSeats && (
-                <>
-                  {/* leyenda */}
-                  <div className="legend">
-                    <span><i className="lg lg-ok" /> Disponible</span>
-                    <span><i className="lg lg-res" /> Reservado</span>
-                    <span><i className="lg lg-occ" /> Ocupado</span>
-                    <span><i className="lg lg-block" /> Bloqueado</span>
-                    <span><i className="lg lg-sel" /> Seleccionado</span>
-                  </div>
-
-                  {/* grilla */}
-                  <div
-                    className="seat-grid"
-                    style={{ gridTemplateColumns: `repeat(${maxCols}, 24px)` }}
-                  >
-                    {filas.map((fila) => {
-                      const maxCol = seats.filter((x) => x.fila === fila).reduce((m, x) => Math.max(m, x.col), 0);
-                      return Array.from({ length: maxCol }).map((_, i) => {
-                        const col = i + 1;
-                        const s = seats.find((x) => x.fila === fila && x.col === col);
-                        const key = s ? `${s.fila}-${s.col}` : `${fila}-${col}`;
-                        if (!s) return <div key={key} className="seat seat--empty" />;
-                        const isSel = seleccionados.includes(key);
-                        const esReservado = s.estado === 'RESERVADO';
-                        const esVendido = s.estado === 'VENDIDO';
-                        const esBloqueado = s.estado === 'BLOQUEADO';
-                        const state = isSel
-                          ? 'selected'
-                          : esReservado
-                          ? 'reserved'
-                          : esVendido
-                          ? 'occupied'
-                          : esBloqueado
-                          ? 'blocked'
-                          : 'available';
-                        return (
-                          <div
-                            key={key}
-                            className={`seat ${state}`}
-                            onClick={() => toggleSeat(s)}
-                            title={`${s.fila}${s.col}`}
-                          />
-                        );
-                      });
-                    })}
-                  </div>
-
-                  <div className="screen">PANTALLA</div>
-
-                  {/* Resumen */}
-                  <div className="summary">
-                    <div><b>Película:</b> {peliculaSel?.titulo}</div>
-                    <div><b>Horario:</b> {funcionSel.horaInicio}</div>
-                    <div><b>Sala:</b> {funcionSel.salaNombre}</div>
-                    <div><b>Asientos:</b> {seleccionados.length > 0
-                      ? seleccionados.map(k => {
-                          const [ff, cc] = k.split('-');
-                          return `${ff}${cc}`;
-                        }).join(', ')
-                      : '—'}</div>
-                    <div><b>Cantidad:</b> {seleccionados.length}</div>
-                    <div className="total"><b>Total:</b> {currency(total)}</div>
-                  </div>
-
-                  {/* métodos de pago */}
-                  <div className="pay-methods">
-                    {[
-                      { key: 'TARJETA', label: 'Tarjeta' },
-                      { key: 'PAYPAL', label: 'PayPal' },
-                      { key: 'EFECTIVO', label: 'Efectivo' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        className={`btn-chip ${metodoPago === opt.key ? 'selected' : ''}`}
-                        onClick={() => setMetodoPago(opt.key)}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  {metodoPago && <div className="muted">Método seleccionado: <b>{metodoPago}</b></div>}
-
-                  <button
-                    className="btn primary"
-                    style={{ marginTop: 12 }}
-                    disabled={!funcionSel || seleccionados.length === 0 || submitting || !metodoPago}
-                    onClick={confirmarAccion}
-                  >
-                    {submitting ? 'Procesando…' : 'Confirmar venta'}
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </section>
+        </div>
       </div>
 
-      {/* estilos mínimos para el layout admin de esta vista */}
-      <style>{`
-        .admin-venta-grid{
-          display:grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap:16px;
+      {/* Modal de Selección de Asientos */}
+      {modalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h2 className="modal-title">
+                Seleccionar Asientos - {peliculaSel?.titulo}
+              </h2>
+              <button 
+                className="modal-close"
+                onClick={() => setModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-content">
+              {/* Información de la función */}
+              <div className="funcion-info">
+                <div className="info-item">
+                  <strong>Horario:</strong> {funcionSel?.horaInicio}
+                </div>
+                <div className="info-item">
+                  <strong>Sala:</strong> {funcionSel?.salaNombre}
+                </div>
+                <div className="info-item">
+                  <strong>Fecha:</strong> {formatFechaCorta(funcionSel?.fecha)}
+                </div>
+                <div className="info-item">
+                  <strong>Precio:</strong> {currency(funcionSel?.precio)}
+                </div>
+              </div>
+
+              {loadingSeats ? (
+                <div className="loading-state">
+                  <div className="loading-spinner"></div>
+                  <p>Cargando mapa de asientos...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Leyenda */}
+                  <div className="legend-section">
+                    <h4 className="legend-title">Estado de Asientos</h4>
+                    <div className="legend-grid">
+                      <div className="legend-item">
+                        <div className="legend-color available"></div>
+                        <span>Disponible</span>
+                      </div>
+                      <div className="legend-item">
+                        <div className="legend-color reserved"></div>
+                        <span>Reservado</span>
+                      </div>
+                      <div className="legend-item">
+                        <div className="legend-color occupied"></div>
+                        <span>Ocupado</span>
+                      </div>
+                      <div className="legend-item">
+                        <div className="legend-color blocked"></div>
+                        <span>Bloqueado</span>
+                      </div>
+                      <div className="legend-item">
+                        <div className="legend-color selected"></div>
+                        <span>Seleccionado</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mapa de Asientos */}
+                  <div className="seats-container">
+                    <div className="screen-indicator">🎬 PANTALLA 🎬</div>
+                    <div 
+                      className="seats-grid"
+                      style={{ gridTemplateColumns: `repeat(${maxCols}, 35px)` }}
+                    >
+                      {filas.map((fila) => {
+                        const maxCol = seats.filter((x) => x.fila === fila).reduce((m, x) => Math.max(m, x.col), 0);
+                        return Array.from({ length: maxCol }).map((_, i) => {
+                          const col = i + 1;
+                          const s = seats.find((x) => x.fila === fila && x.col === col);
+                          const key = s ? `${s.fila}-${s.col}` : `${fila}-${col}`;
+                          if (!s) return <div key={key} className="seat seat-empty" />;
+                          const isSel = seleccionados.includes(key);
+                          const esReservado = s.estado === 'RESERVADO';
+                          const esVendido = s.estado === 'VENDIDO';
+                          const esBloqueado = s.estado === 'BLOQUEADO';
+                          const state = isSel
+                            ? 'selected'
+                            : esReservado
+                            ? 'reserved'
+                            : esVendido
+                            ? 'occupied'
+                            : esBloqueado
+                            ? 'blocked'
+                            : 'available';
+                          return (
+                            <div
+                              key={key}
+                              className={`seat ${state}`}
+                              onClick={() => toggleSeat(s)}
+                              title={`${s.fila}${s.col}`}
+                            >
+                              {s.fila}{s.col}
+                            </div>
+                          );
+                        });
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Panel de Reservas */}
+                  {reservas.length > 0 && (
+                    <div className="reservas-section">
+                      <h4 className="reservas-title">🧾 Reservas Pendientes</h4>
+                      <div className="reservas-list">
+                        {reservas.map((r) => (
+                          <div key={r.numeroReserva} className="reserva-card">
+                            <div className="reserva-header">
+                              <span className="reserva-number">Reserva #{r.numeroReserva}</span>
+                              <span className="reserva-date">
+                                {new Date(r.creadoEn).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="reserva-details">
+                              <div className="reserva-seats">
+                                <strong>Asientos:</strong> {String(r.asientos || '').replace(/,/g, ', ')}
+                              </div>
+                            </div>
+                            <button
+                              className="confirm-btn"
+                              onClick={async () => {
+                                try {
+                                  await post(`/api/empleado/funciones/${funcionSel.id}/confirmar-reserva`, {
+                                    numeroReserva: r.numeroReserva,
+                                    metodoPago: 'EFECTIVO',
+                                  });
+                                  alert(`Reserva ${r.numeroReserva} confirmada`);
+                                  await cargarAsientos(funcionSel.id);
+                                  await cargarReservas(funcionSel.id);
+                                  window.open(`${API_BASE}/api/empleado/funciones/${funcionSel.id}/reservas/${r.numeroReserva}/tickets`, '_blank');
+                                } catch {
+                                  alert('No se pudo confirmar la reserva');
+                                }
+                              }}
+                            >
+                              Confirmar Reserva
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resumen de Compra */}
+                  <div className="purchase-summary">
+                    <h4 className="summary-title">Resumen de Compra</h4>
+                    <div className="summary-grid">
+                      <div className="summary-item">
+                        <span className="summary-label">Asientos seleccionados:</span>
+                        <span className="summary-value seats-list">
+                          {seleccionados.length > 0
+                            ? seleccionados.map(k => {
+                                const [ff, cc] = k.split('-');
+                                return `${ff}${cc}`;
+                              }).join(', ')
+                            : '—'}
+                        </span>
+                      </div>
+                      <div className="summary-item">
+                        <span className="summary-label">Cantidad:</span>
+                        <span className="summary-value">{seleccionados.length}</span>
+                      </div>
+                      <div className="summary-item total">
+                        <span className="summary-label">Total a Pagar:</span>
+                        <span className="summary-value total-amount">{currency(total)}</span>
+                      </div>
+                    </div>
+
+                    <div className="payment-section">
+                      <div className="payment-method-display">
+                        <span className="payment-label">Método de pago:</span>
+                        <span className="payment-value">{metodoPago}</span>
+                      </div>
+                      
+                      <div className="modal-actions">
+                        <button
+                          className="cancel-btn"
+                          onClick={() => setModalOpen(false)}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          className="confirm-purchase-btn"
+                          disabled={seleccionados.length === 0 || submitting}
+                          onClick={confirmarVenta}
+                        >
+                          {submitting ? (
+                            <>
+                              <div className="btn-spinner"></div>
+                              Procesando...
+                            </>
+                          ) : (
+                            <>
+                              <span className="btn-icon">🎫</span>
+                              Confirmar Venta
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Estilos CSS */}
+      <style jsx>{`
+        .venta-entradas-container {
+          min-height: 100vh;
+          background: #f8fafc;
+          padding: 20px;
         }
-        @media (max-width: 1100px){
-          .admin-venta-grid{ grid-template-columns: 1fr; }
+
+        .venta-header {
+          background: white;
+          border-radius: 12px;
+          padding: 24px;
+          margin-bottom: 24px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e2e8f0;
         }
-        .pane{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
-        .pane-title{ font-weight:600; margin-bottom:10px; }
 
-        .movie-list{ display:flex; flex-direction:column; gap:10px; max-height:520px; overflow:auto; }
-        .movie-row{ display:flex; align-items:center; gap:12px; border:1px solid #eee; border-radius:10px; padding:8px 10px; }
-        .movie-row.active{ outline:2px solid #6366f1; }
-        .movie-thumb{ width:52px; height:70px; border-radius:8px; background:#f3f4f6 center/cover no-repeat; flex:0 0 52px; }
-        .movie-meta{ flex:1; min-width:0; }
-        .movie-title{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .movie-sub{ font-size:12px; color:#6b7280; }
-
-        .btn, .btn-sm, .btn-chip, .btn.primary{
-          border:0; background:#f3f4f6; padding:8px 12px; border-radius:8px; cursor:pointer;
+        .header-content {
+          display: flex;
+          align-items: center;
+          gap: 16px;
         }
-        .btn-sm{ padding:6px 10px; font-size:12px; }
-        .btn.primary{ background:#2563eb; color:#fff; }
-        .btn:disabled, .btn-sm:disabled{ opacity:.6; cursor:not-allowed; }
 
-        .funciones-list{ display:flex; flex-direction:column; gap:10px; max-height:520px; overflow:auto; }
-        .funcion-row{ display:flex; justify-content:space-between; align-items:center; border:1px solid #eee; border-radius:10px; padding:10px; background:#fafafa; }
-        .funcion-row.selected{ outline:2px solid #2563eb; background:#fff; }
-        .funcion-left{ display:flex; flex-direction:column; gap:2px; }
-        .funcion-row-1{ display:flex; align-items:center; gap:8px; }
-        .funcion-row-2{ font-size:12px; color:#6b7280; }
-        .funcion-price{ font-weight:600; }
-
-        .badge{ background:#eef2ff; color:#3730a3; padding:2px 8px; border-radius:999px; font-size:12px; }
-        .badge.danger{ background:#fee2e2; color:#991b1b; }
-
-        .legend{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:8px; color:#4b5563; font-size:13px; }
-        .lg{ display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:middle; }
-        .lg-ok{ background:#22c55e; }
-        .lg-res{ background:#eab308; }
-        .lg-occ{ background:#ef4444; }
-        .lg-block{ background:#9ca3af; }
-        .lg-sel{ background:#2563eb; }
-
-        .seat-grid{ display:grid; gap:6px; margin-bottom:10px; }
-        .seat{ width:24px; height:24px; border-radius:6px; border:1px solid #e5e7eb; background:#10b98122; cursor:pointer; }
-        .seat.available{ background:#10b98122; }
-        .seat.reserved{ background:#f59e0b22; }
-        .seat.occupied{ background:#ef444422; cursor:not-allowed; }
-        .seat.blocked{ background:#9ca3af22; cursor:not-allowed; }
-        .seat.selected{ background:#2563eb33; border-color:#2563eb; }
-        .seat--empty{ visibility:hidden; }
-
-        .screen{ text-align:center; font-size:12px; color:#6b7280; margin:6px 0 10px; }
-
-        .summary{ display:grid; grid-template-columns: 1fr 1fr; gap:6px 14px; margin:8px 0; font-size:14px; }
-        .summary .total{ grid-column: 1 / -1; font-size:16px; }
-
-        .pay-methods{ display:flex; gap:8px; margin-top:6px; }
-        .btn-chip{ padding:6px 10px; font-size:12px; background:#f3f4f6; }
-        .btn-chip.selected{ background:#2563eb; color:#fff; }
-
-        .input, .select{
-          border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff;
+        .header-icon {
+          font-size: 2.5rem;
+          background: #667eea;
+          color: white;
+          border-radius: 12px;
+          padding: 12px;
         }
-        .muted{ color:#6b7280; font-size:13px; }
+
+        .header-title {
+          font-size: 1.75rem;
+          font-weight: 700;
+          color: #1a202c;
+          margin: 0;
+        }
+
+        .header-subtitle {
+          font-size: 1rem;
+          color: #718096;
+          margin: 0;
+        }
+
+        .search-section {
+          background: white;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 24px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e2e8f0;
+        }
+
+        .search-container {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+
+        .search-input-group {
+          flex: 1;
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 12px;
+          font-size: 1.1rem;
+          color: #718096;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 12px 12px 12px 40px;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          font-size: 1rem;
+          transition: all 0.2s ease;
+          background: white;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .category-select {
+          padding: 12px 16px;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          font-size: 1rem;
+          background: white;
+          min-width: 180px;
+          cursor: pointer;
+        }
+
+        .search-btn {
+          padding: 12px 20px;
+          background: #667eea;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: background 0.2s ease;
+        }
+
+        .search-btn:hover {
+          background: #5a67d8;
+        }
+
+        .venta-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          height: calc(100vh - 200px);
+        }
+
+        @media (max-width: 1024px) {
+          .venta-grid {
+            grid-template-columns: 1fr;
+            height: auto;
+          }
+        }
+
+        .panel {
+          background: white;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e2e8f0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .panel-header {
+          padding: 20px 24px;
+          border-bottom: 1px solid #e2e8f0;
+          background: #f7fafc;
+        }
+
+        .panel-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin: 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .panel-count {
+          background: #667eea;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 0.875rem;
+          font-weight: 600;
+        }
+
+        .panel-content {
+          flex: 1;
+          padding: 20px;
+          overflow-y: auto;
+        }
+
+        /* Movies Grid */
+        .movies-grid {
+          display: grid;
+          gap: 16px;
+        }
+
+        .movie-card {
+          display: flex;
+          gap: 16px;
+          padding: 16px;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: white;
+        }
+
+        .movie-card:hover {
+          border-color: #667eea;
+          transform: translateY(-1px);
+        }
+
+        .movie-card.active {
+          border-color: #667eea;
+          background: #f0f4ff;
+        }
+
+        .movie-poster {
+          width: 60px;
+          height: 90px;
+          border-radius: 6px;
+          background: #f7fafc;
+          background-size: cover;
+          background-position: center;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .poster-placeholder {
+          font-size: 1.5rem;
+          color: #cbd5e0;
+        }
+
+        .movie-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .movie-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin: 0 0 8px 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .movie-details {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .detail-item {
+          font-size: 0.875rem;
+          color: #718096;
+        }
+
+        .movie-action {
+          display: flex;
+          align-items: center;
+        }
+
+        .action-indicator {
+          color: #667eea;
+          font-size: 1.25rem;
+          font-weight: bold;
+        }
+
+        /* Functions List */
+        .functions-list {
+          display: grid;
+          gap: 12px;
+        }
+
+        .function-card {
+          display: flex;
+          gap: 16px;
+          padding: 16px;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: white;
+        }
+
+        .function-card:hover:not(.sold-out) {
+          border-color: #667eea;
+          transform: translateY(-1px);
+        }
+
+        .function-card.sold-out {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .function-time {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          align-items: center;
+          flex-shrink: 0;
+        }
+
+        .time-badge {
+          background: #667eea;
+          color: white;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+
+        .format-badge {
+          background: #e2e8f0;
+          color: #4a5568;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .function-details {
+          flex: 1;
+        }
+
+        .function-location {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 500;
+          color: #2d3748;
+          margin-bottom: 4px;
+        }
+
+        .location-icon {
+          font-size: 0.875rem;
+        }
+
+        .function-date {
+          font-size: 0.875rem;
+          color: #718096;
+          margin-bottom: 8px;
+        }
+
+        .function-stats {
+          display: flex;
+          gap: 12px;
+        }
+
+        .stat {
+          font-size: 0.75rem;
+          color: #718096;
+        }
+
+        .function-price {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
+        .price-amount {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #2d3748;
+        }
+
+        .sold-out-badge {
+          background: #e53e3e;
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .select-btn {
+          background: #48bb78;
+          color: white;
+          padding: 6px 12px;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+        }
+
+        .modal-container {
+          background: white;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 1000px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+          padding: 24px;
+          border-bottom: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #f7fafc;
+        }
+
+        .modal-title {
+          font-size: 1.5rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin: 0;
+        }
+
+        .modal-close {
+          background: none;
+          border: none;
+          font-size: 2rem;
+          cursor: pointer;
+          color: #718096;
+          padding: 0;
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+        }
+
+        .modal-close:hover {
+          background: #e2e8f0;
+        }
+
+        .modal-content {
+          padding: 24px;
+        }
+
+        .funcion-info {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+          padding: 16px;
+          background: #f7fafc;
+          border-radius: 8px;
+        }
+
+        .info-item {
+          font-size: 0.9rem;
+          color: #4a5568;
+        }
+
+        /* Seats Section */
+        .seats-container {
+          text-align: center;
+          margin: 24px 0;
+        }
+
+        .screen-indicator {
+          background: #2d3748;
+          color: white;
+          padding: 12px;
+          border-radius: 6px;
+          margin-bottom: 24px;
+          font-weight: 600;
+          font-size: 1rem;
+        }
+
+        .seats-grid {
+          display: grid;
+          gap: 6px;
+          justify-content: center;
+          margin: 0 auto;
+          max-width: fit-content;
+        }
+
+        .seat {
+          width: 35px;
+          height: 35px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: white;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .seat:hover:not(.occupied):not(.blocked) {
+          transform: scale(1.1);
+        }
+
+        .seat.available {
+          background: #48bb78;
+        }
+
+        .seat.reserved {
+          background: #ed8936;
+        }
+
+        .seat.occupied {
+          background: #e53e3e;
+          cursor: not-allowed;
+        }
+
+        .seat.blocked {
+          background: #a0aec0;
+          cursor: not-allowed;
+        }
+
+        .seat.selected {
+          background: #667eea;
+          transform: scale(1.1);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .seat-empty {
+          visibility: hidden;
+        }
+
+        /* Legend */
+        .legend-section {
+          margin-bottom: 20px;
+        }
+
+        .legend-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin-bottom: 12px;
+        }
+
+        .legend-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          gap: 12px;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.875rem;
+          color: #4a5568;
+        }
+
+        .legend-color {
+          width: 16px;
+          height: 16px;
+          border-radius: 4px;
+          flex-shrink: 0;
+        }
+
+        .legend-color.available { background: #48bb78; }
+        .legend-color.reserved { background: #ed8936; }
+        .legend-color.occupied { background: #e53e3e; }
+        .legend-color.blocked { background: #a0aec0; }
+        .legend-color.selected { background: #667eea; }
+
+        /* Reservas */
+        .reservas-section {
+          margin: 24px 0;
+        }
+
+        .reservas-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin-bottom: 16px;
+        }
+
+        .reservas-list {
+          display: grid;
+          gap: 12px;
+        }
+
+        .reserva-card {
+          padding: 16px;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          background: white;
+        }
+
+        .reserva-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+
+        .reserva-number {
+          font-weight: 600;
+          color: #2d3748;
+        }
+
+        .reserva-date {
+          font-size: 0.875rem;
+          color: #718096;
+        }
+
+        .reserva-details {
+          margin-bottom: 12px;
+        }
+
+        .reserva-seats {
+          font-size: 0.875rem;
+          color: #4a5568;
+        }
+
+        .confirm-btn {
+          width: 100%;
+          padding: 8px 16px;
+          background: #48bb78;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .confirm-btn:hover {
+          background: #38a169;
+        }
+
+        /* Purchase Summary */
+        .purchase-summary {
+          background: #f7fafc;
+          padding: 20px;
+          border-radius: 8px;
+          margin-top: 24px;
+        }
+
+        .summary-title {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin-bottom: 16px;
+        }
+
+        .summary-grid {
+          display: grid;
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+
+        .summary-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .summary-label {
+          font-weight: 500;
+          color: #4a5568;
+        }
+
+        .summary-value {
+          font-weight: 600;
+          color: #2d3748;
+        }
+
+        .summary-item.total {
+          padding-top: 12px;
+          border-top: 2px solid #e2e8f0;
+        }
+
+        .total-amount {
+          font-size: 1.25rem;
+          color: #667eea;
+        }
+
+        .seats-list {
+          font-family: 'Courier New', monospace;
+          background: #edf2f7;
+          padding: 4px 8px;
+          border-radius: 4px;
+        }
+
+        .payment-section {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .payment-method-display {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px;
+          background: white;
+          border-radius: 6px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .payment-label {
+          font-weight: 500;
+          color: #4a5568;
+        }
+
+        .payment-value {
+          font-weight: 600;
+          color: #2d3748;
+        }
+
+        .modal-actions {
+          display: flex;
+          gap: 12px;
+        }
+
+        .cancel-btn {
+          flex: 1;
+          padding: 12px 24px;
+          background: #e2e8f0;
+          color: #4a5568;
+          border: none;
+          border-radius: 6px;
+          font-size: 1rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .cancel-btn:hover {
+          background: #cbd5e0;
+        }
+
+        .confirm-purchase-btn {
+          flex: 2;
+          padding: 12px 24px;
+          background: #667eea;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: background 0.2s ease;
+        }
+
+        .confirm-purchase-btn:hover:not(:disabled) {
+          background: #5a67d8;
+        }
+
+        .confirm-purchase-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .btn-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid transparent;
+          border-top: 2px solid white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        /* Empty States */
+        .empty-state {
+          text-align: center;
+          padding: 40px 20px;
+          color: #718096;
+        }
+
+        .empty-icon {
+          font-size: 2.5rem;
+          margin-bottom: 16px;
+          opacity: 0.5;
+        }
+
+        .empty-text {
+          font-size: 1rem;
+          margin: 0;
+        }
+
+        .loading-state {
+          text-align: center;
+          padding: 40px 20px;
+          color: #718096;
+        }
+
+        .loading-spinner {
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e2e8f0;
+          border-top: 4px solid #667eea;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 16px;
+        }
       `}</style>
     </div>
   );

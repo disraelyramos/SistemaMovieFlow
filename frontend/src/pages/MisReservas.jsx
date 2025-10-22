@@ -97,12 +97,23 @@ function EstadoBadge({ estado = '—', puedeCancelar }) {
 /* ============ Normalizador API -> UI ============ */
 function mapRowToUI(r) {
   const start = r.START_TS ? new Date(r.START_TS) : null;
+
+  // Flag pagado: soporta true/false, 1/0 o minúsculas
+  const pagado =
+    r.PAGADO === true ||
+    r.PAGADO === 1 ||
+    r.pagado === true ||
+    r.pagado === 1;
+
   const now = new Date();
-  const puedeCancelar =
+  let puedeCancelar =
     String(r.ESTADO || '').toUpperCase() === 'RESERVADO' &&
     start instanceof Date &&
     !isNaN(start) &&
-    start.getTime() - now.getTime() >= 24 * 60 * 60 * 1000;
+    (start.getTime() - now.getTime()) >= 24 * 60 * 60 * 1000;
+
+  // Si está pagado, ya no se puede cancelar desde la web
+  if (pagado) puedeCancelar = false;
 
   return {
     id: r.ID_EVENTO,
@@ -114,6 +125,7 @@ function mapRowToUI(r) {
     notas: r.NOTAS,
     estado: r.ESTADO,
     puedeCancelar,
+    pagado, // <- nuevo
   };
 }
 
@@ -446,7 +458,9 @@ export default function MisReservas() {
               <div className="cf-grid" style={{ gap: 18 }}>
                 {reservasFiltradas.map((r) => {
                   const disabled =
-                    !r.puedeCancelar || String(r.estado).toUpperCase() === 'CANCELADO';
+                    r.pagado ||
+                    !r.puedeCancelar ||
+                    String(r.estado).toUpperCase() === 'CANCELADO';
                   const mismaFecha = fmtFecha(r.inicioISO) === fmtFecha(r.finISO);
                   const esPendiente = String(r.estado).toUpperCase() === 'RESERVADO';
 
@@ -475,8 +489,24 @@ export default function MisReservas() {
                           <div>Personas: <b>{r.personas ?? '-'}</b></div>
                           {r.notas ? <div>Notas: {cleanNotas(r.notas)}</div> : null}
 
-                          {/* Aviso 24h para pendientes */}
-                          {esPendiente && !r.puedeCancelar && (
+                          {/* Aviso prioridad: pagado */}
+                          {esPendiente && r.pagado && (
+                            <div style={{
+                              marginTop: 10,
+                              background: '#ecfdf5',
+                              border: '1px solid #a7f3d0',
+                              color: '#065f46',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 700
+                            }}>
+                              ✅ Reserva pagada
+                            </div>
+                          )}
+
+                          {/* Aviso 24h (solo si no está pagado) */}
+                          {esPendiente && !r.pagado && !r.puedeCancelar && (
                             <div style={{
                               marginTop: 10,
                               background: '#fff7ed',
@@ -487,7 +517,7 @@ export default function MisReservas() {
                               fontSize: 13,
                               fontWeight: 700
                             }}>
-                              ⚠️ Esta reserva comienza en menos de 24 h; ya no puede cancelarse desde la web.
+                              ⚠️ Esta reserva comienza en menos de 24 h.
                             </div>
                           )}
                         </div>
@@ -504,9 +534,9 @@ export default function MisReservas() {
                             fontWeight: 700,
                           }}
                           title={
-                            r.puedeCancelar
-                              ? 'Cancelar reserva'
-                              : 'Solo puede cancelarse hasta 24 h antes'
+                            r.pagado
+                              ? 'Reserva pagada: no se puede cancelar en línea.'
+                              : (r.puedeCancelar ? 'Cancelar reserva' : 'Solo puede cancelarse hasta 24 h antes')
                           }
                         >
                           Cancelar reserva

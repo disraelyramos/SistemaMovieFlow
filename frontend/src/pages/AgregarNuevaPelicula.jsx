@@ -5,6 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import AgregarPelicula from '../components/AgregarPelicula';
 import EditarPelicula from '../components/EditarPelicula';
+import '../styles/peliculas.css';
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -170,12 +171,12 @@ const Peliculas = () => {
         <h3 className="mb-0">Películas</h3>
 
         {/* Buscador */}
-        <div className="input-group input-group-lg flex-grow-1" style={{ minWidth: 360, maxWidth: 640 }}>
-          <span className="input-group-text bg-white">
+        <div className="input-group input-group-lg flex-grow-1 p-ctl" style={{ minWidth: 360, maxWidth: 640 }}>
+          <span className="input-group-text">
             <i className="bi bi-search" />
           </span>
           <input
-            className="form-control border-start-0 ps-0"
+            className="form-control"
             placeholder="Buscar por título…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -194,12 +195,12 @@ const Peliculas = () => {
             Agregar nueva película
           </button>
 
-          <div className="input-group input-group-lg" style={{ width: 220 }}>
-            <span className="input-group-text bg-white">
+          <div className="input-group input-group-lg p-ctl" style={{ width: 220 }}>
+            <span className="input-group-text">
               <i className="bi bi-tags" />
             </span>
             <select
-              className="form-select border-start-0 ps-0"
+              className="form-select"
               value={categoriaId}
               onChange={(e) => setCategoriaId(e.target.value)}
               aria-label="Filtrar por categoría"
@@ -226,51 +227,51 @@ const Peliculas = () => {
         <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
           {peliculas.map((p) => (
             <div className="col" key={p.id}>
-              <div className="card h-100 shadow-sm border-0 position-relative">
-                {/* Botones */}
-                <div className="position-absolute bottom-0 end-0 p-2">
-                  <div className="btn-group">
-                    <button className="btn btn-light btn-sm border" title="Editar película" onClick={() => abrirEdicion(p)}>
-                      <i className="bi bi-pencil-square" />
-                    </button>
-                    <button
-                      className="btn btn-light btn-sm border"
-                      title={checking ? 'Validando…' : 'Eliminar película'}
-                      disabled={checking}
-                      onClick={() => abrirEliminar(p)}
-                    >
-                      <i className="bi bi-trash" />
-                    </button>
-                  </div>
-                </div>
-
+              <div className="card p-card h-100 shadow-sm border-0 position-relative">
+                {/* Imagen */}
                 {(p.imagenUrl || p.posterUrl || p.posterLocal) && (
-                  <img
-                    src={absUrl(p.imagenUrl || p.posterUrl || p.posterLocal)}
-                    alt={p.titulo}
-                    className="card-img-top"
-                    style={{ objectFit: 'cover', height: 220 }}
-                  />
+                  <div className="p-media">
+                    <img
+                      src={absUrl(p.imagenUrl || p.posterUrl || p.posterLocal)}
+                      alt={p.titulo}
+                      loading="lazy"
+                    />
+                  </div>
                 )}
 
-                <div className="card-body pb-5">
+                {/* Acciones */}
+                <div className="p-actions">
+                  <button className="btn btn-light btn-sm border" title="Editar película" onClick={() => abrirEdicion(p)}>
+                    <i className="bi bi-pencil-square" />
+                  </button>
+                  <button
+                    className="btn btn-light btn-sm border"
+                    title={checking ? 'Validando…' : 'Eliminar película'}
+                    disabled={checking}
+                    onClick={() => abrirEliminar(p)}
+                  >
+                    <i className="bi bi-trash" />
+                  </button>
+                </div>
+
+                <div className="card-body pb-4">
                   <div className="d-flex align-items-center justify-content-between">
-                    <h5 className="card-title mb-2" title={p.titulo}>{p.titulo}</h5>
+                    <h5 className="p-title" title={p.titulo}>{p.titulo}</h5>
                     {p.estado && (
-                      <span className={`badge ${p.estado === 'ACTIVA' ? 'bg-success' : 'bg-warning text-dark'}`}>
+                      <span className={`p-status ${p.estado === 'ACTIVA' ? 'p-status--active' : 'p-status--warn'}`}>
                         {p.estado}
                       </span>
                     )}
                   </div>
 
-                  <div className="mb-2 d-flex flex-wrap gap-2">
-                    {p.formatoNombre && <span className="badge bg-secondary">{p.formatoNombre}</span>}
-                    {p.idiomaNombre && <span className="badge bg-info text-dark">{p.idiomaNombre}</span>}
-                    {p.clasificacionCodigo && <span className="badge bg-dark">{p.clasificacionCodigo}</span>}
+                  <div className="chips mb-2">
+                    {p.formatoNombre && <span className="chip">{p.formatoNombre}</span>}
+                    {p.idiomaNombre && <span className="chip chip--info">{p.idiomaNombre}</span>}
+                    {p.clasificacionCodigo && <span className="chip chip--dark">{p.clasificacionCodigo}</span>}
                   </div>
 
-                  {p.duracionMin != null && <div className="text-muted mb-1">{p.duracionMin} min</div>}
-                  {p.categoriaNombre && <div className="text-muted mb-1">{p.categoriaNombre}</div>}
+                  {p.duracionMin != null && <div className="p-meta mb-1">{p.duracionMin} min</div>}
+                  {p.categoriaNombre && <div className="p-meta mb-1">{p.categoriaNombre}</div>}
                 </div>
               </div>
             </div>
@@ -293,11 +294,16 @@ const Peliculas = () => {
 
       {/* Confirm de eliminación */}
       {confirmOpen && (
-        <div className="position-fixed top-0 start-0 w-100 h-100" style={{ zIndex: 1090 }} role="dialog" aria-modal="true"
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ zIndex: 1090 }}
+          role="dialog"
+          aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape' && !deleting) setConfirmOpen(false);
             if (e.key === 'Enter' && !deleting) eliminarPelicula();
-          }}>
+          }}
+        >
           <div className="w-100 h-100 bg-dark bg-opacity-50" onClick={() => !deleting && setConfirmOpen(false)} />
           <div className="position-absolute top-50 start-50 translate-middle" style={{ minWidth: 380 }}>
             <div className="card shadow-lg rounded-3">
@@ -325,7 +331,7 @@ const Peliculas = () => {
             </div>
           </div>
         </div>
-      )}  
+      )}
     </div>
   );
 };

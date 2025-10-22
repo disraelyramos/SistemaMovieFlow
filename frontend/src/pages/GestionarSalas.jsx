@@ -21,8 +21,7 @@ export default function GestionarSalas() {
   const [deleting, setDeleting] = useState(false);
   const [salaToDelete, setSalaToDelete] = useState(null);
 
-  // --- Conservamos el generador NxM por si lo vuelves a usar en el futuro,
-  // --- pero ya no mostramos el botón que lo abre.
+  // (Oculto) generador NxM por si lo vuelves a usar
   const [genOpen, setGenOpen] = useState(false);
   const [genSala, setGenSala] = useState(null);
   const [filas, setFilas] = useState(10);
@@ -50,7 +49,7 @@ export default function GestionarSalas() {
       const { data } = await axios.post(`${API_BASE}/api/salas/${genSala.id}/asientos/generar`, body);
       toast.success(`Se generaron ${data?.created ?? 0} asientos`);
       cerrarGenerar();
-      await load(); // recarga listado (capacidad)
+      await load();
     } catch (err) {
       toast.error(err?.response?.data?.message || 'No se pudieron generar asientos');
     }
@@ -80,7 +79,6 @@ export default function GestionarSalas() {
   const abrirEditar = (s) => {
     setEditing(s);
     setNombre(s.nombre);
-    // capacidad YA NO se edita aquí (solo en editor avanzado)
     setCapacidad(String(s.capacidad || ''));
     setEstado(String(s.estado || 'ACTIVA').toUpperCase());
     setModalOpen(true);
@@ -92,11 +90,9 @@ export default function GestionarSalas() {
 
     try {
       if (editing) {
-        // ← Editar: NO tocamos capacidad
         await axios.put(`${API_BASE}/api/salas/${editing.id}`, { nombre, estado });
         toast.success('Sala actualizada');
       } else {
-        // ← Crear: capacidad obligatoria
         if (Number(capacidad) <= 0) return toast.warn('Capacidad debe ser > 0');
         await axios.post(`${API_BASE}/api/salas`, { nombre, capacidad });
         toast.success('Sala creada');
@@ -108,7 +104,7 @@ export default function GestionarSalas() {
       const msg = err?.response?.data?.message;
       if (status === 409 && /inactivar/i.test(msg || '')) {
         toast.info(msg || 'No se puede inactivar: la sala tiene funciones activas.');
-        setEstado('ACTIVA'); // revertir selección
+        setEstado('ACTIVA');
       } else {
         toast.error(msg || 'Error al guardar');
       }
@@ -125,7 +121,7 @@ export default function GestionarSalas() {
       await axios.delete(`${API_BASE}/api/salas/${salaToDelete.id}`);
       toast.success('Sala eliminada');
       cancelarEliminar();
-      await load(); // recarga la tabla
+      await load();
     } catch (err) {
       toast.error(err?.response?.data?.message || 'No se pudo eliminar');
     } finally {
@@ -133,8 +129,86 @@ export default function GestionarSalas() {
     }
   };
 
+  // ======= UI Helpers (solo estilos, no lógica)
+  const estadoClass = (value) =>
+    String(value).toUpperCase() === 'ACTIVA' ? 'pill pill--ok' : 'pill pill--warn';
+
   return (
-    <div className="container py-3">
+    <div className="container py-3 salas-page">
+      <style>{`
+        /* ===== Estilos locales (no rompen Bootstrap) ===== */
+        .salas-page h2 { font-weight: 700; letter-spacing:.2px; }
+        .table thead th {
+          font-weight:600;
+          color:#475569;
+          border-bottom:1px solid #e2e8f0 !important;
+          background:#f8fafc;
+        }
+        .table tbody tr { border-color:#f1f5f9; }
+        .table tbody tr:hover { background:#f9fafb; }
+        .table td { vertical-align: middle; }
+
+        /* Píldoras de estado */
+        .pill{
+          display:inline-flex; align-items:center; gap:.5rem;
+          padding:.35rem .65rem;
+          border-radius:999px; font-weight:600; font-size:.8rem;
+          line-height:1; border:1px solid transparent;
+        }
+        .pill--ok   { background:#dcfce7; color:#166534; border-color:#86efac; }
+        .pill--warn { background:#fef9c3; color:#92400e; border-color:#fde68a; }
+
+        /* Botón "Editor avanzado" deshabilitado */
+        .btn[disabled], .btn.disabled {
+          opacity:.6 !important; cursor:not-allowed !important;
+        }
+
+        /* Grupo de acciones más legible */
+        .btn-group .btn {
+          padding: .35rem .55rem;
+        }
+
+        /* Modales: centrados, aireados y con scroll seguro */
+        .modal-dialog { max-width: 640px; }
+        .modal-content { border-radius: 12px; border:1px solid #e2e8f0; }
+        .modal-header { border-bottom-color:#f1f5f9; }
+        .modal-footer { border-top-color:#f1f5f9; }
+        .modal-title { font-weight:700; }
+
+        /* Inputs */
+        .form-label { font-weight:600; color:#334155; }
+
+        /* Botón primario consistente con tema */
+        .btn-primary {
+          background:#2563eb; border-color:#2563eb;
+        }
+        .btn-primary:hover { background:#1d4ed8; border-color:#1d4ed8; }
+
+        /* Confirm eliminar (card) */
+        .card .fa-exclamation-triangle { font-size:1.1rem; }
+
+        /* Tabla ancho columnas */
+        .col-nombre { width: 45%; }
+        .col-cap    { width: 15%; }
+        .col-estado { width: 20%; }
+        .col-acc    { width: 20%; }
+        /* Compacto sin altura forzada ni centrado vertical */
+        /* ===== Quitar el espacio blanco inferior en modales cortos ===== */
+        .modal-dialog.modal-compact {
+          margin: 1.25rem auto !important;
+          align-items: flex-start !important;
+        }
+
+        .modal-dialog.modal-compact .modal-content {
+          height: fit-content !important;
+          max-height: none !important;
+        }
+
+        .modal-dialog.modal-compact .modal-body {
+          flex: none !important;
+        }
+      `}</style>
+
       <div className="d-flex align-items-center justify-content-between mb-3">
         <h2 className="m-0">Salas</h2>
         <button className="btn btn-success" onClick={abrirCrear}>
@@ -151,10 +225,10 @@ export default function GestionarSalas() {
           <table className="table align-middle">
             <thead>
               <tr>
-                <th style={{width:'45%'}}>Nombre</th>
-                <th style={{width:'15%'}}>Capacidad</th>
-                <th style={{width:'20%'}}>Estado</th>
-                <th style={{width:'20%'}} className="text-end">Acciones</th>
+                <th className="col-nombre">Nombre</th>
+                <th className="col-cap">Capacidad</th>
+                <th className="col-estado">Estado</th>
+                <th className="col-acc text-end">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -163,49 +237,49 @@ export default function GestionarSalas() {
                   <td>{s.nombre}</td>
                   <td>{s.capacidad}</td>
                   <td>
-                    <span className={`badge ${s.estado === 'ACTIVA' ? 'bg-success' : 'bg-warning text-dark'}`}>
-                      {s.estado}
+                    <span className={estadoClass(s.estado)}>
+                      <span className={`fas ${String(s.estado).toUpperCase() === 'ACTIVA' ? 'fa-check-circle' : 'fa-pause-circle'}`} />
+                      {String(s.estado).toUpperCase()}
                     </span>
                   </td>
-                    <td className="text-end" style={{ whiteSpace: 'nowrap' }}>
-                      <div className="btn-group btn-group-sm" role="group" aria-label="acciones sala">
-                        {Number(s.funcionesActivas) > 0 ? (
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary"
-                            title="No disponible: la sala tiene funciones ACTIVAS"
-                            disabled
-                          >
-                            <i className="fas fa-th-large me-1" /> Editor avanzado
-                          </button>
-                        ) : (
-                          <Link
-                            to={`/dashboard/salas/${s.id}/disenio`}
-                            className="btn btn-outline-secondary"
-                            title="Editor avanzado"
-                          >
-                            <i className="fas fa-th-large me-1" /> Editor avanzado
-                          </Link>
-                        )}
-
+                  <td className="text-end" style={{ whiteSpace: 'nowrap' }}>
+                    <div className="btn-group btn-group-sm" role="group" aria-label="acciones sala">
+                      {Number(s.funcionesActivas) > 0 ? (
                         <button
-                          className="btn btn-outline-primary"
-                          onClick={() => abrirEditar(s)}
-                          title="Editar sala"
+                          type="button"
+                          className="btn btn-outline-secondary"
+                          title="No disponible: la sala tiene funciones ACTIVAS"
+                          disabled
                         >
-                          <i className="fas fa-pen" /> Editar
+                          <i className="fas fa-th-large me-1" /> Editor avanzado
                         </button>
-
-                        <button
-                          className="btn btn-outline-danger"
-                          onClick={() => solicitarEliminar(s)}
-                          title="Eliminar sala"
+                      ) : (
+                        <Link
+                          to={`/dashboard/salas/${s.id}/disenio`}
+                          className="btn btn-outline-secondary"
+                          title="Editor avanzado"
                         >
-                          <i className="fas fa-trash" /> Eliminar
-                        </button>
-                      </div>
-                    </td>
+                          <i className="fas fa-th-large me-1" /> Editor avanzado
+                        </Link>
+                      )}
 
+                      <button
+                        className="btn btn-outline-primary"
+                        onClick={() => abrirEditar(s)}
+                        title="Editar sala"
+                      >
+                        <i className="fas fa-pen" /> Editar
+                      </button>
+
+                      <button
+                        className="btn btn-outline-danger"
+                        onClick={() => solicitarEliminar(s)}
+                        title="Eliminar sala"
+                      >
+                        <i className="fas fa-trash" /> Eliminar
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -217,7 +291,8 @@ export default function GestionarSalas() {
       {modalOpen && (
         <>
           <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true">
-            <div className="modal-dialog">
+            {/* centrado + scroll si hiciera falta */}
+            <div className="modal-dialog modal-compact d-flex align-items-start">
               <div className="modal-content">
                 <form onSubmit={guardar} noValidate>
                   <div className="modal-header">
@@ -313,11 +388,11 @@ export default function GestionarSalas() {
         </div>
       )}
 
-      {/* (Oculto) Generador NxM — ya no hay botón para abrirlo */}
+      {/* (Oculto) Generador NxM */}
       {genOpen && (
         <>
           <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true">
-            <div className="modal-dialog">
+            <div className="modal-dialog modal-compact d-flex align-items-start">
               <div className="modal-content">
                 <form onSubmit={generarAsientos} noValidate>
                   <div className="modal-header">

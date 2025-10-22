@@ -1,7 +1,6 @@
 // src/pages/DasboarddeGraficas.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import '../styles/dashboard-compact.css';
 
 /* === Chart.js (barras pastel) === */
 import { Bar } from 'react-chartjs-2';
@@ -389,58 +388,17 @@ const EstadisticasAdminSimple = () => {
 };
 
 /* ===========================================================
-   RESUMEN DE VENTAS (boletos): incluir históricas (resiliente)
+   RESUMEN DE VENTAS (boletos): histórico + resiliente
    =========================================================== */
 function VentasPeriodo() {
   const [loading, setLoading] = useState(true);
-  const [funciones, setFunciones] = useState([]);
   const [error, setError] = useState('');
   const [periodo, setPeriodo] = useState('mes');
 
-  useEffect(() => {
-    let cancel = false;
-    (async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const cat = await tryGetJson('/api/empleado/cartelera') || [];
-        const altCatalog = await tryGetJson('/api/empleado/cartelera/historico') || [];
-
-        const peliculas = [
-          ...new Map(
-            [...(Array.isArray(cat) ? cat : []), ...(Array.isArray(altCatalog) ? altCatalog : [])]
-            .map(m => [m.id, { id: m.id, titulo: m.titulo || m.nombre || `Pelicula ${m.id}` }])
-          ).values()
-        ];
-
-        const packs = await Promise.all(
-          peliculas.map(async (p) => {
-            try {
-              const a = await tryGetJson(`/api/empleado/cartelera/${p.id}/funciones`);
-              const b = await tryGetJson(`/api/empleado/cartelera/${p.id}/funciones/historico`);
-              const arr = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])];
-              return arr.map((f) => ({
-                peliculaId: p.id,
-                titulo: p.titulo,
-                fecha: f.fecha ?? f.FECHA ?? f.fecha_funcion ?? null,
-                precio: Number(f.precio ?? f.PRECIO ?? 0) || 0,
-                vendidos: Number(f.vendidos ?? f.VENDIDOS ?? f.ticketsVendidos ?? 0) || 0,
-              }));
-            } catch {
-              return [];
-            }
-          })
-        );
-
-        if (!cancel) setFunciones(packs.flat());
-      } catch {
-        if (!cancel) setError('');
-      } finally {
-        if (!cancel) setLoading(false);
-      }
-    })();
-    return () => { cancel = true; };
-  }, []);
+  // Serie por fecha de VENTA (no por estado de función)
+  // rowsTickets: [{ fecha: Date, total: number, boletos: number }]
+  const [rowsTickets, setRowsTickets] = useState([]);
+  const [topPeliculas, setTopPeliculas] = useState([]); // [{ titulo, total }]
 
   const hoy = new Date();
   const Y = hoy.getFullYear();
@@ -448,59 +406,174 @@ function VentasPeriodo() {
   const finMes = new Date(Y, M + 1, 0);
   const diasMes = finMes.getDate();
 
-  const funcionesFiltradas = useMemo(() => {
-    const arr = funciones.map((f) => ({ ...f, _fecha: parseFecha(f.fecha) }));
-    if (periodo === 'dia') return arr.filter((f) => isSameDay(f._fecha, hoy));
-    if (periodo === 'semana') return arr.filter((f) => isInLastDays(f._fecha, 7));
-    return arr.filter((f) => sameMonth(f._fecha, Y, M));
-  }, [funciones, periodo, hoy, Y, M]);
+  /* ----- Utils locales ----- */
+  const parseFechaVenta = (v) => {
+    if (!v) return null;
+    const s = String(v).trim();
+    const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m1) return new Date(+m1[1], +m1[2]-1, +m1[3]);
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  };
 
+  const filtrarPorPeriodo = (arr) => {
+    if (periodo === 'dia') return arr.filter(r => isSameDay(r.fecha, hoy));
+    if (periodo === 'semana') return arr.filter(r => isInLastDays(r.fecha, 7));
+    return arr.filter(r => sameMonth(r.fecha, Y, M));
+  };
+
+  /* ----- 1) Intento: endpoint agregado (si tu backend ya lo expone) -----
+     Rutas posibles:
+       GET /api/ventas-boletos/resumen?scope=dia|semana|mes
+       GET /api/tickets/ventas-resumen?scope=dia|semana|mes
+     Respuesta:
+       { serie:[{fecha, total, boletos}], top:[{titulo,total}] }
+  ------------------------------------------------------------------------ */
+  const tryFetchResumenBoletos = async (scope) => {
+    const rutas = [
+      `/api/ventas-boletos/resumen?scope=${scope}`,
+      `/api/tickets/ventas-resumen?scope=${scope}`
+    ];
+    for (const r of rutas) {
+      const data = await tryGetJson(r);
+      if (data && (Array.isArray(data.serie) || Array.isArray(data.top))) {
+        const serie = (data.serie || [])
+          .map(x => ({ fecha: parseFechaVenta(x.fecha), total: Number(x.total||0), boletos: Number(x.boletos||0) }))
+          .filter(x => x.fecha);
+        const top = (data.top || []).map(t => ({ titulo: t.titulo || t.nombre || '—', total: Number(t.total||0) }));
+        return { serie, top };
+      }
+    }
+    return null;
+  };
+
+  /* ----- 2) Fallback: construir ventas con cartelera (activa + histórico) ----- */
+  const fallbackFromFunciones = async () => {
+    try {
+      const cat = await tryGetJson('/api/empleado/cartelera') || [];
+      const altCatalog = await tryGetJson('/api/empleado/cartelera/historico') || [];
+
+      const peliculas = [
+        ...new Map(
+          [...(Array.isArray(cat) ? cat : []), ...(Array.isArray(altCatalog) ? altCatalog : [])]
+          .map(m => [m.id, { id: m.id, titulo: m.titulo || m.nombre || `Pelicula ${m.id}` }])
+        ).values()
+      ];
+
+      const packs = await Promise.all(
+        peliculas.map(async (p) => {
+          const a = await tryGetJson(`/api/empleado/cartelera/${p.id}/funciones`);
+          const b = await tryGetJson(`/api/empleado/cartelera/${p.id}/funciones/historico`);
+          const arr = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])];
+
+          return arr.map((f) => {
+            const fecha = f.fecha ?? f.FECHA ?? f.fecha_funcion ?? null;
+            const precio = Number(f.precio ?? f.PRECIO ?? 0) || 0;
+            const vendidos = Number(f.vendidos ?? f.VENDIDOS ?? f.ticketsVendidos ?? 0) || 0;
+            return {
+              titulo: p.titulo,
+              fecha: parseFechaVenta(fecha),
+              total: vendidos * precio,
+              boletos: vendidos
+            };
+          }).filter(x => x.fecha);
+        })
+      );
+
+      const serie = packs.flat();
+
+      const topMap = new Map();
+      serie.forEach(x => { topMap.set(x.titulo, (topMap.get(x.titulo)||0) + x.total); });
+      const top = [...topMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([titulo, total]) => ({ titulo, total }));
+
+      return { serie, top };
+    } catch {
+      return { serie: [], top: [] };
+    }
+  };
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // 1) Intentar endpoint agregado
+        let agg = await tryFetchResumenBoletos(periodo);
+
+        // 2) Si no hay endpoint, usar fallback
+        if (!agg) {
+          agg = await fallbackFromFunciones();
+        }
+
+        if (!cancel) {
+          const serieFiltrada = filtrarPorPeriodo(agg.serie || []);
+          setRowsTickets(serieFiltrada);
+          setTopPeliculas(agg.top || []);
+        }
+      } catch {
+        if (!cancel) {
+          setRowsTickets([]);
+          setTopPeliculas([]);
+          setError('No se pudieron cargar las ventas de boletos.');
+        }
+      } finally {
+        if (!cancel) setLoading(false);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [periodo]);
+
+  /* ----- KPIs ----- */
   const kpis = useMemo(() => {
-    let ingresos = 0, boletos = 0;
-    funcionesFiltradas.forEach((f) => {
-      ingresos += (f.vendidos || 0) * (f.precio || 0);
-      boletos += f.vendidos || 0;
-    });
+    const ingresos = rowsTickets.reduce((s, r) => s + (r.total || 0), 0);
+    const boletos = rowsTickets.reduce((s, r) => s + (r.boletos || 0), 0);
     return { ingresos, boletos };
-  }, [funcionesFiltradas]);
+  }, [rowsTickets]);
 
-  const serie = useMemo(() => {
+  /* ----- Serie por período (siempre por fecha de VENTA) ----- */
+  const serieChart = useMemo(() => {
     if (periodo === 'dia') {
-      const v = funcionesFiltradas.reduce((acc, f) => acc + (f.vendidos || 0) * (f.precio || 0), 0);
+      const v = rowsTickets.reduce((acc, r) => acc + (r.total || 0), 0);
       return [{ d: dm(hoy), v }];
     }
+
     if (periodo === 'semana') {
       const days = lastNDates(7).map(d => ({ d: d.slice(5).replace('-', '/'), v: 0 }));
-      const map = new Map(days.map((o) => [o.d, 0]));
-      funcionesFiltradas.forEach((f) => {
-        const k = ymd(f._fecha).slice(5).replace('-', '/');
-        map.set(k, (map.get(k) || 0) + (f.vendidos || 0) * (f.precio || 0));
+      const map = new Map(days.map(o => [o.d, 0]));
+      rowsTickets.forEach((r) => {
+        const k = ymd(r.fecha).slice(5).replace('-', '/');
+        map.set(k, (map.get(k) || 0) + (r.total || 0));
       });
-      return days.map((o) => ({ d: o.d, v: map.get(o.d) || 0 }));
+      return days.map(o => ({ d: o.d, v: map.get(o.d) || 0 }));
     }
+
+    // mes
     const base = Array.from({ length: diasMes }, (_, i) => ({ d: `${pad2(i + 1)}/${pad2(M + 1)}`, v: 0 }));
-    funcionesFiltradas.forEach((f) => {
-      const d = f._fecha?.getDate();
+    rowsTickets.forEach((r) => {
+      const d = r.fecha?.getDate();
       if (!d) return;
-      base[d - 1].v += (f.vendidos || 0) * (f.precio || 0);
+      base[d - 1].v += (r.total || 0);
     });
     return base;
-  }, [funcionesFiltradas, periodo, diasMes, M, hoy]);
+  }, [rowsTickets, periodo, diasMes, M, hoy]);
 
+  /* ----- Gráficas ----- */
   const pastelBlue = 'rgba(37,99,235,0.30)';
   const pastelBlueBorder = 'rgba(37,99,235,0.85)';
 
-  let dataVentas, optionsVentas, tituloPeriodo =
-    periodo === 'dia' ? `Resumen de ventas — Hoy` :
-    periodo === 'semana' ? `Resumen de ventas — Últimos 7 días` :
-    `Resumen de ventas — ${pad2(M + 1)}/${Y}`;
+  const tituloPeriodo =
+    periodo === 'dia' ? `Resumen de ventas de boletos — Hoy` :
+    periodo === 'semana' ? `Resumen de ventas de boletos — Últimos 7 días` :
+    `Resumen de ventas de boletos — ${pad2(M + 1)}/${Y}`;
 
+  let dataVentas;
   if (periodo === 'dia') {
     dataVentas = {
       labels: [`Hoy (${dm(hoy)})`],
       datasets: [{
         label: 'Ingresos',
-        data: [serie[0]?.v || 0],
+        data: [serieChart[0]?.v || 0],
         backgroundColor: pastelBlue,
         borderColor: pastelBlueBorder,
         borderWidth: 1,
@@ -510,13 +583,14 @@ function VentasPeriodo() {
     };
   } else if (periodo === 'semana') {
     const ultimos7 = lastNDates(7).map(s => new Date(s));
-    const semanaLabels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+    const labels = ultimos7.map(d => ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]);
     const valores = ultimos7.map(d => {
-      const pt = serie.find(x => x.d === `${pad2(d.getMonth()+1)}/${pad2(d.getDate())}`);
+      const key = `${pad2(d.getMonth()+1)}/${pad2(d.getDate())}`;
+      const pt = serieChart.find(x => x.d === key);
       return pt ? pt.v : 0;
     });
     dataVentas = {
-      labels: semanaLabels,
+      labels,
       datasets: [{
         label: 'Ingresos por día',
         data: valores,
@@ -528,14 +602,14 @@ function VentasPeriodo() {
       }]
     };
   } else {
+    const getWeekOfMonth = (date) => {
+      const first = new Date(date.getFullYear(), date.getMonth(), 1);
+      const offset = (first.getDay() + 6) % 7; // Lunes=0
+      return Math.floor((offset + date.getDate() - 1) / 7) + 1;
+    };
     const ranges = (() => {
       const start = new Date(Y, M, 1);
       const end = new Date(Y, M + 1, 0);
-      const getWeekOfMonth = (date) => {
-        const first = new Date(date.getFullYear(), date.getMonth(), 1);
-        const offset = (first.getDay() + 6) % 7;
-        return Math.floor((offset + date.getDate() - 1) / 7) + 1;
-      };
       const out = []; let d = new Date(start);
       while (d <= end) {
         const w = getWeekOfMonth(d);
@@ -549,7 +623,7 @@ function VentasPeriodo() {
       let sum = 0, d = new Date(r.ini);
       while (d <= r.fin) {
         const k = `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}`;
-        const pt = serie.find(x => x.d === k);
+        const pt = serieChart.find(x => x.d === k);
         sum += pt ? pt.v : 0;
         d.setDate(d.getDate() + 1);
       }
@@ -569,12 +643,13 @@ function VentasPeriodo() {
     };
   }
 
-  optionsVentas = {
+  const optionsVentas = {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
   };
 
+  /* ----- Render ----- */
   return (
     <div className="card">
       <div className="card-header" style={{ alignItems: 'center' }}>
@@ -625,20 +700,19 @@ function VentasPeriodo() {
           <div className="chart-box mt-4">
             <div className="chart-title">Top películas (por ingresos)</div>
             {(() => {
-              const map = new Map();
-              funcionesFiltradas.forEach((f) => {
-                const inc = (f.vendidos || 0) * (f.precio || 0);
-                map.set(f.titulo, (map.get(f.titulo) || 0) + inc);
-              });
-              const top = [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
+              const top = topPeliculas
+                .slice()
+                .sort((a,b)=>b.total-a.total)
+                .slice(0,5);
+
               return top.length === 0 ? (
                 <p className="text-sm text-gray-600">No hay ventas registradas en este período.</p>
               ) : (
                 <ol className="ml-5" style={{ listStyle: 'decimal', paddingLeft: 18 }}>
-                  {top.map(([titulo, inc]) => (
+                  {top.map(({ titulo, total }) => (
                     <li key={titulo} style={{ marginBottom: 6 }}>
                       <span className="badge" style={{ marginRight: 8 }}>{titulo}</span>
-                      <b>{currency(inc)}</b>
+                      <b>{currency(total)}</b>
                     </li>
                   ))}
                 </ol>

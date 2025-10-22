@@ -102,6 +102,24 @@ async function getChartImage(chartRef) {
   return canvas.toDataURL("image/png", 1.0);
 }
 
+/* ===== Paleta de colores suaves para gráficas ===== */
+const COLORS = {
+  capacidad: '#E5E7EB',      // Gris suave para capacidad
+  vendidos: '#93C5FD',       // Azul pastel suave
+  reservados: '#FCD34D',     // Amarillo pastel suave
+  tendencia: '#86EFAC',      // Verde pastel suave para tendencia
+  tendenciaLine: '#059669',  // Verde más definido para la línea
+};
+
+/* ===== Colores hover ===== */
+const COLORS_HOVER = {
+  capacidad: '#D1D5DB',
+  vendidos:  '#60A5FA',
+  reservados:'#FBBF24',
+  tendencia: '#4ADE80',
+  tendenciaLine: '#047857',  // (opcional) hover para la línea de tendencia
+};
+
 export default function ReportesDeSala() {
   /* -------- filtro de sala (único) -------- */
   const [salaSel, setSalaSel] = useState("ALL");
@@ -193,9 +211,36 @@ export default function ReportesDeSala() {
     return {
       labels,
       datasets: [
-        { label: "Capacidad", data: capacidad, borderWidth: 1, backgroundColor: "rgba(148, 163, 184, 0.35)" },
-        { label: "Vendidos", data: vendidos, borderWidth: 1, backgroundColor: "rgba(99, 102, 241, 0.8)" },
-        { label: "Reservados", data: reservados, borderWidth: 1, backgroundColor: "rgba(250, 204, 21, 0.8)" }, // amarillo
+        { 
+          label: "Capacidad", 
+          data: capacidad, 
+          borderWidth: 1, 
+          backgroundColor: COLORS.capacidad,
+          borderColor: COLORS.capacidad,
+          hoverBackgroundColor: COLORS_HOVER.capacidad,
+          hoverBorderColor: COLORS_HOVER.capacidad,
+          borderRadius: 4
+        },
+        { 
+          label: "Vendidos", 
+          data: vendidos, 
+          borderWidth: 1, 
+          backgroundColor: COLORS.vendidos,
+          borderColor: COLORS.vendidos,
+          hoverBackgroundColor: COLORS_HOVER.vendidos,
+          hoverBorderColor: COLORS_HOVER.vendidos,
+          borderRadius: 4
+        },
+        { 
+          label: "Reservados", 
+          data: reservados, 
+          borderWidth: 1, 
+          backgroundColor: COLORS.reservados,
+          borderColor: COLORS.reservados,
+          hoverBackgroundColor: COLORS_HOVER.reservados,
+          hoverBorderColor: COLORS_HOVER.reservados,
+          borderRadius: 4
+        },
       ],
     };
   }, [ocupacionFiltrada]);
@@ -214,9 +259,15 @@ export default function ReportesDeSala() {
           data: pct,
           fill: true,
           tension: 0.35,
-          backgroundColor: "rgba(99, 102, 241, .15)",
-          borderColor: "rgba(99, 102, 241, 1)",
-          pointRadius: 3,
+          backgroundColor: "rgba(134, 239, 172, 0.2)",
+          borderColor: COLORS.tendenciaLine,
+          pointBackgroundColor: COLORS.tendenciaLine,
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointHoverBackgroundColor: COLORS.tendenciaLine,
+          pointHoverBorderColor: "#ffffff",
         },
       ],
     };
@@ -224,18 +275,75 @@ export default function ReportesDeSala() {
 
   const barOpts = {
     responsive: true,
-    plugins: { legend: { position: "top" } },
-    scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } },
+    plugins: { 
+      legend: { 
+        position: "top",
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+            weight: '500'
+          }
+        }
+      } 
+    },
+    scales: { 
+      y: { 
+        beginAtZero: true, 
+        ticks: { precision: 0 },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)'
+        }
+      }, 
+      x: { 
+        grid: { display: false } 
+      } 
+    },
     maintainAspectRatio: false,
   };
 
   const lineOpts = {
     responsive: true,
     plugins: {
-      legend: { display: true, position: "top" },
-      tooltip: { callbacks: { label: (ctx) => `${Number(ctx.raw || 0).toFixed(1)}%` } },
+      legend: { 
+        display: true, 
+        position: "top",
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+            weight: '500'
+          }
+        }
+      },
+      tooltip: { 
+        callbacks: { 
+          label: (ctx) => `${Number(ctx.raw || 0).toFixed(1)}%` 
+        },
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        titleColor: '#1F2937',
+        bodyColor: '#374151',
+        borderColor: '#E5E7EB',
+        borderWidth: 1
+      },
     },
-    scales: { y: { beginAtZero: true, max: 100, ticks: { callback: (v) => `${v}%` } }, x: { grid: { display: false } } },
+    scales: { 
+      y: { 
+        beginAtZero: true, 
+        max: 100, 
+        ticks: { 
+          callback: (v) => `${v}%` 
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)'
+        }
+      }, 
+      x: { 
+        grid: { display: false } 
+      } 
+    },
     maintainAspectRatio: false,
   };
 

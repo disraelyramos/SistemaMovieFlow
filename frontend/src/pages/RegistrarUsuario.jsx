@@ -1,8 +1,7 @@
-// src/pages/RegistrarUsuario.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import 'bootstrap/dist/js/bootstrap.bundle.min.js'; 
 import { FaEdit, FaChevronDown } from 'react-icons/fa';
 import NuevoUsuarioModal from '../components/NuevoUsuarioModal';
 
@@ -85,12 +84,37 @@ const RegistrarUsuario = () => {
   };
 
   const obtenerColorBadge = (nombre) => {
-    switch ((nombre || '').toLowerCase()) {
-      case 'activo': return 'bg-success';
-      case 'inactivo': return 'bg-danger';
-      case 'suspendido': return 'bg-warning';
-      case 'bloqueado': return 'bg-secondary';
-      default: return 'bg-dark';
+    switch (nombre.toLowerCase()) {
+      case 'activo': 
+        return {
+          background: 'rgba(34, 197, 94, 0.12)',
+          color: '#166534',
+          border: '1px solid rgba(34, 197, 94, 0.3)'
+        };
+      case 'inactivo': 
+        return {
+          background: 'rgba(239, 68, 68, 0.12)',
+          color: '#7f1d1d',
+          border: '1px solid rgba(239, 68, 68, 0.3)'
+        };
+      case 'suspendido': 
+        return {
+          background: 'rgba(245, 158, 11, 0.12)',
+          color: '#7c2d12',
+          border: '1px solid rgba(245, 158, 11, 0.3)'
+        };
+      case 'bloqueado': 
+        return {
+          background: 'rgba(107, 114, 128, 0.12)',
+          color: '#374151',
+          border: '1px solid rgba(107, 114, 128, 0.3)'
+        };
+      default: 
+        return {
+          background: 'rgba(156, 163, 175, 0.12)',
+          color: '#4b5563',
+          border: '1px solid rgba(156, 163, 175, 0.3)'
+        };
     }
   };
 
@@ -149,6 +173,7 @@ const RegistrarUsuario = () => {
             <th>Nombre</th>
             <th>Correo</th>
             <th>Usuario</th>
+            <th>Contraseña</th>
             <th>Estado</th>
             <th>Rol</th>
             <th>Acciones</th>
@@ -157,24 +182,32 @@ const RegistrarUsuario = () => {
         <tbody>
           {usuariosPaginados.map(u => {
             const estadoNombre = u.ESTADO_NOMBRE || 'Desconocido';
-            const estadoBadge = obtenerColorBadge(estadoNombre);
+            const estiloBadge = obtenerColorBadge(estadoNombre);
 
             return (
               <tr key={u.ID}>
                 <td>{u.NOMBRE}</td>
                 <td>{u.CORREO}</td>
                 <td>{u.USUARIO}</td>
+                <td>********</td>
                 <td>
-                  <span className={`badge rounded-pill ${estadoBadge}`}>
+                  <span 
+                    className="badge rounded-pill"
+                    style={{
+                      background: estiloBadge.background,
+                      color: estiloBadge.color,
+                      border: estiloBadge.border,
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}
+                  >
                     {estadoNombre}
                   </span>
                 </td>
                 <td>{u.ROLE_NOMBRE}</td>
                 <td>
-                  <button
-                    className="btn btn-sm btn-warning me-2"
-                    onClick={() => editarUsuario(u)}
-                  >
+                  <button className="btn btn-sm btn-warning me-2" onClick={() => editarUsuario(u)}>
                     <FaEdit />
                   </button>
                 </td>
@@ -183,7 +216,7 @@ const RegistrarUsuario = () => {
           })}
           {usuariosPaginados.length === 0 && (
             <tr>
-              <td colSpan="6" className="text-center">
+              <td colSpan="7" className="text-center">
                 No se encontraron usuarios.
               </td>
             </tr>
@@ -195,9 +228,7 @@ const RegistrarUsuario = () => {
         <nav>
           <ul className="pagination">
             <li className={`page-item ${paginaActual === 1 ? 'disabled' : ''}`}>
-              <button className="page-link" onClick={() => cambiarPagina(paginaActual - 1)}>
-                &laquo;
-              </button>
+              <button className="page-link" onClick={() => cambiarPagina(paginaActual - 1)}>&laquo;</button>
             </li>
             {Array.from({ length: totalPaginas }, (_, i) => (
               <li key={i + 1} className={`page-item ${paginaActual === i + 1 ? 'active' : ''}`}>
@@ -207,9 +238,7 @@ const RegistrarUsuario = () => {
               </li>
             ))}
             <li className={`page-item ${paginaActual === totalPaginas ? 'disabled' : ''}`}>
-              <button className="page-link" onClick={() => cambiarPagina(paginaActual + 1)}>
-                &raquo;
-              </button>
+              <button className="page-link" onClick={() => cambiarPagina(paginaActual + 1)}>&raquo;</button>
             </li>
           </ul>
         </nav>

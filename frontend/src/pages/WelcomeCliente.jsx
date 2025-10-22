@@ -16,6 +16,75 @@ const API_BASE  = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
 const WC_CACHE_KEY = 'wc_slides_cache';
 const WC_DEBUG = (import.meta.env?.VITE_WC_DEBUG || '') === '1';
+/*Nuevos Helpers para el carrusel*/
+/* ===== Solo películas activas / no eliminadas ===== */
+function isMovieActive(m) {
+  const estado = String(m?.ESTADO ?? m?.estado ?? '').trim().toUpperCase();
+  const activo = m?.ACTIVO ?? m?.activo ?? m?.active ?? m?.isActive;
+
+  // señales de inactividad/eliminación
+  const marcadoEliminado = (m?.ELIMINADO ?? m?.eliminado ?? m?.deleted ?? m?.deletedAt) ? true : false;
+  if (marcadoEliminado) return false;
+
+  if (estado) {
+    if (['INACTIVA','INACTIVO','ELIMINADA','ELIMINADO','DESHABILITADA','BAJA'].includes(estado)) return false;
+    // cuando viene explícito ACTIVA/ACTIVO, es válido
+    if (['ACTIVA','ACTIVO','PUBLICADA','EN CARTELERA'].includes(estado)) return true;
+  }
+
+  // si hay bandera booleana/numérica
+  if (typeof activo !== 'undefined') {
+    if (activo === true || activo === 1 || activo === '1' || String(activo).toLowerCase() === 's') return true;
+    return false;
+  }
+
+  // por defecto: si no dice lo contrario, se considera activa
+  return true;
+}
+// Quita un slide “roto” (imagen 404) y reajusta el índice
+const dropSlide = (badIndex) => {
+  setSlides((prev) => {
+    const next = prev.filter((_, i) => i !== badIndex);
+    if (!next.length) return [];            // quedó vacío
+    setIdx((old) => (old >= next.length ? 0 : old));
+    return next;
+  });
+};
+
+/* ===== Normalizador de slides (filtra activas + con imagen válida) ===== */
+function normalizeSlides(arr) {
+  if (!Array.isArray(arr)) return [];
+  const slides = arr
+    .filter(isMovieActive)
+    .map(toSlide)
+    .filter(Boolean); // toSlide ya tira las que no tienen poster
+  return uniqByTitle(slides).slice(0, 8);
+}
+
+/* ===== Cache con expiración (6h) – compatible con la versión anterior ===== */
+const WC_CACHE_MAX_AGE = 60 * 60 * 1000; // 1 hora
+
+function readSlidesCache() {
+  try {
+    const raw = localStorage.getItem(WC_CACHE_KEY);
+    if (!raw) return null;
+    const val = JSON.parse(raw);
+    // soporte a formato viejo (array plano)
+    if (Array.isArray(val)) return val;
+    // formato nuevo: { items, ts }
+    if (val && Array.isArray(val.items)) {
+      const fresh = typeof val.ts === 'number' ? (Date.now() - val.ts) < WC_CACHE_MAX_AGE : true;
+      return fresh ? val.items : null;
+    }
+  } catch {}
+  return null;
+}
+function writeSlidesCache(items) {
+  try {
+    // guarda en nuevo formato pero sigue leyendo el viejo
+    localStorage.setItem(WC_CACHE_KEY, JSON.stringify({ items, ts: Date.now() }));
+  } catch {}
+}
 
 /* ================= UI helpers ================= */
 function getClienteNombre() {
@@ -136,7 +205,7 @@ function readLocalPeliculas() {
   return null;
 }
 
-/* ================= Banner Evento Privado (glass) ================= */
+/* ================= Banner Evento Privado (glass mejorado) ================= */
 function EventoPrivadoBanner() {
   const navigate = useNavigate();
   return (
@@ -146,6 +215,7 @@ function EventoPrivadoBanner() {
           <span className="wv-badge wv-float-1">🎉</span>
           <span className="wv-badge wv-float-2">🎬</span>
           <span className="wv-badge wv-float-3">🎧</span>
+          <span className="wv-badge wv-float-4">⭐</span>
         </div>
 
         <header className="wv-evento-head">
@@ -156,18 +226,18 @@ function EventoPrivadoBanner() {
         </header>
 
         <ul className="wv-evento-features" aria-label="Beneficios">
-          <li>Butacas premium y sala climatizada</li>
-          <li>Audio envolvente y pantalla gigante</li>
-          <li>Snacks y combos personalizados</li>
-          <li>Asistencia del staff durante tu evento</li>
+          <li>🎭 Butacas premium y sala climatizada</li>
+          <li>🔊 Audio envolvente y pantalla gigante</li>
+          <li>🍿 Snacks y combos personalizados</li>
+          <li>👨‍💼 Asistencia del staff durante tu evento</li>
         </ul>
 
         <div className="wv-evento-cta">
           <button className="wv-btn-gradient" onClick={() => navigate('/reservar-evento')}>
-            Reservar evento
+            🎪 Reservar evento
           </button>
           <button className="wv-btn-ghost" onClick={() => navigate('/mis-reservas')}>
-            Ver mis reservas
+            📋 Ver mis reservas
           </button>
         </div>
       </div>
@@ -297,77 +367,84 @@ function MiniCalendario() {
   },[items]);
 
   useEffect(()=>{
-    const cid = getClienteId();
+    const cid   = getClienteId();
     const email = getClienteEmail();
+
+    const headers = headersAuth(); // ya definido arriba
+    const j = async (res) => {
+      try {
+        const ct = (res.headers.get("content-type")||"").toLowerCase();
+        if (ct.includes("application/json")) return await res.json();
+        const t = (await res.text()||"").trim();
+        return t && (/^[{\[]/.test(t)) ? JSON.parse(t) : null;
+      } catch { return null; }
+    };
+
+    // Merge por ID + START (evita duplicados)
+    const mergeUniq = (a,b)=>{
+      const key = (r)=>`${r.ID_EVENTO ?? r.id_evento ?? r.id ?? r.ID}|${r.START_TS ?? r.start_ts ?? r.START ?? r.start}`;
+      const map = new Map();
+      [...(a||[]), ...(b||[])].forEach(x=> map.set(key(x), x));
+      return [...map.values()];
+    };
+
+    const norm = (rows)=> (Array.isArray(rows)?rows:(rows?.rows||[])).map(row=>({
+      ID_EVENTO   : row.ID_EVENTO ?? row.id_evento ?? row.id ?? row.ID,
+      SALA_ID     : row.SALA_ID ?? row.sala_id ?? row.SALA ?? row.sala ?? row.SALA_NOMBRE ?? "—",
+      SALA_NOMBRE : row.SALA_NOMBRE ?? row.sala_nombre ?? row.NOMBRE_SALA ?? row.nombre_sala ?? null,
+      START_TS    : row.START_TS ?? row.start_ts ?? row.START ?? row.start,
+      END_TS      : row.END_TS ?? row.end_ts ?? row.END ?? row.end,
+      DURACION_MIN: row.DURACION_MIN ?? row.duracion_min ?? row.duracion ?? null,
+      PERSONAS    : row.PERSONAS ?? row.personas ?? null,
+      NOTAS       : row.NOTAS ?? row.notas ?? "",
+      ESTADO      : row.ESTADO ?? row.estado ?? "",
+    }));
 
     (async ()=>{
       setLoading(true); setSoftMsg("");
 
-      let data = null;
-
+      let base = [];
       try {
-        const r = await fetch(`${API_BASE}/api/eventos-reservados/mis`, { headers: headersAuth(), credentials:'include' });
-        const j = await safeJson(r); if (j) data = j;
+        // 1) “mis” (suele traer solo futuros)
+        const rMis = await fetch(`${API_BASE}/api/eventos-reservados/mis`, { headers, credentials:'omit' });
+        const dMis = await j(rMis);
+        base = norm(dMis);
       } catch {}
 
-      if ((!data || !Array.isArray(data) || !data.length) && cid) {
-        try {
-          const r = await fetch(`${API_BASE}/api/eventos-reservados?clienteId=${cid}`, { headers: headersAuth(), credentials:'include' });
-          const j = await safeJson(r); if (j) data = j;
-        } catch {}
-      }
-
-      if ((!data || !Array.isArray(data) || !data.length) && email) {
-        const q = encodeURIComponent(email);
-        try {
-          const r1 = await fetch(`${API_BASE}/api/eventos-reservados?uemail=${q}`, { headers: headersAuth(), credentials:'include' });
-          const j1 = await safeJson(r1); if (j1) data = j1;
-        } catch {}
-        if ((!data || !Array.isArray(data) || !data.length)) {
-          try {
-            const r2 = await fetch(`${API_BASE}/api/eventos-reservados?email=${q}`, { headers: headersAuth(), credentials:'include' });
-            const j2 = await safeJson(r2); if (j2) data = j2;
-          } catch {}
+      // 2) Complemento histórico (all=1) por identidad del usuario
+      let extra = [];
+      try {
+        if (cid) {
+          const rCid = await fetch(`${API_BASE}/api/eventos-reservados?clienteId=${cid}&all=1`, { headers, credentials:'omit' });
+          const dCid = await j(rCid);
+          extra = mergeUniq(extra, norm(dCid));
         }
-      }
+      } catch {}
+      try {
+        if (email) {
+          const q = encodeURIComponent(email);
+          const rMail = await fetch(`${API_BASE}/api/eventos-reservados?uemail=${q}&all=1`, { headers, credentials:'omit' });
+          const dMail = await j(rMail);
+          extra = mergeUniq(extra, norm(dMail));
+        }
+      } catch {}
 
-      if (!data || !Array.isArray(data) || !data.length) {
-        try {
-          const r = await fetch(`${API_BASE}/api/eventos-reservados?all=1&_=${Date.now()}`, { credentials:'omit' });
-          const j = await safeJson(r); if (j) data = j;
-        } catch {}
-      }
-      if (!data || !Array.isArray(data) || !data.length) {
-        try {
-          const r = await fetch(`${API_BASE}/api/eventos-reservados?_=${Date.now()}`, { credentials:'omit' });
-          const j = await safeJson(r); if (j) data = j;
-        } catch {}
-      }
-      if (!data || !Array.isArray(data) || !data.length) {
-        try {
-          const r = await fetch(`${API_BASE}/api/eventos-especiales?_=${Date.now()}`, { credentials:'omit' });
-          const j = await safeJson(r); if (j) data = j;
-        } catch {}
-      }
+      // 3) Último recurso: todo (para admins o si falla identidad)
+      try {
+        const rAll = await fetch(`${API_BASE}/api/eventos-reservados?all=1&_=${Date.now()}`, { credentials:'omit' });
+        const dAll = await j(rAll);
+        extra = mergeUniq(extra, norm(dAll));
+      } catch {}
 
-      const src = Array.isArray(data) ? data : (data?.rows || []);
-      const norm = src.map(row=>({
-        ID_EVENTO: row.ID_EVENTO ?? row.id_evento ?? row.id ?? row.ID,
-        SALA_ID: row.SALA_ID ?? row.sala_id ?? row.SALA ?? row.sala ?? row.SALA_NOMBRE ?? "—",
-        SALA_NOMBRE: row.SALA_NOMBRE ?? row.sala_nombre ?? row.NOMBRE_SALA ?? row.nombre_sala ?? null,
-        START_TS: row.START_TS ?? row.start_ts ?? row.START ?? row.start,
-        END_TS: row.END_TS ?? row.end_ts ?? row.END ?? row.end,
-        DURACION_MIN: row.DURACION_MIN ?? row.duracion_min ?? row.duracion ?? null,
-        PERSONAS: row.PERSONAS ?? row.personas ?? null,
-        NOTAS: row.NOTAS ?? row.notas ?? "",
-        ESTADO: row.ESTADO ?? row.estado ?? "",
-      }));
+      // Mezcla “mis (futuros)” + “histórico”
+      const merged = mergeUniq(base, extra);
 
-      setItems(norm);
-      if (!norm.length) setSoftMsg("No encontramos eventos para mostrar.");
+      setItems(merged);
+      if (!merged.length) setSoftMsg("No encontramos eventos para mostrar.");
       setLoading(false);
     })();
   },[]);
+
 
   const goPrev = () => setVisible(v => (v.m===0?{y:v.y-1,m:11}:{y:v.y,m:v.m-1}));
   const goNext = () => setVisible(v => (v.m===11?{y:v.y+1,m:0}:{y:v.y,m:v.m+1}));
@@ -475,43 +552,201 @@ export default function WelcomeCliente() {
     `}</style>
   );
 
-  /* ====== Estilos del carrusel: fondo blur + poster 2:3 ====== */
+  /* ====== Estilos del carrusel mejorado ====== */
   const HeroStyles = () => (
     <style>{`
-      .wc-carousel { position: relative; border-radius: 18px; background:#071520; box-shadow: 0 12px 30px rgba(0,0,0,.35); }
-      .wc-hero-box { position: relative; width:100%; padding-top:42%; } /* ~21:9 */
-      .wc-hero-abs { position:absolute; inset:0; overflow:hidden; border-radius:18px; }
-      .wc-bg-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; filter: blur(16px) saturate(115%) brightness(.85); transform: scale(1.08); }
-      .wc-hero-grad { position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(5,11,15,.55) 55%, rgba(5,11,15,.92) 100%); }
-      .wc-slide { position:absolute; inset:0; opacity:0; transition: opacity .45s ease; }
-      .wc-slide.is-active { opacity:1; }
+      .wc-carousel { 
+        position: relative; 
+        border-radius: 24px; 
+        background: linear-gradient(145deg, #0f1e2e 0%, #152235 100%);
+        box-shadow: 0 20px 40px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.3);
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.1);
+      }
+      
+      .wc-hero-box { 
+        position: relative; 
+        width:100%; 
+        padding-top: 45%; 
+      }
+      
+      .wc-hero-abs { 
+        position:absolute; 
+        inset:0; 
+        overflow:hidden; 
+        border-radius:24px; 
+      }
+      
+      .wc-bg-img { 
+        position:absolute; 
+        inset:0; 
+        width:100%; 
+        height:100%; 
+        object-fit:cover; 
+        object-position:center; 
+        filter: blur(20px) saturate(120%) brightness(.8); 
+        transform: scale(1.1); 
+        transition: all 0.8s ease;
+      }
+      
+      .wc-hero-grad { 
+        position:absolute; 
+        inset:0; 
+        background: linear-gradient(
+          135deg, 
+          rgba(0,0,0,.4) 0%, 
+          rgba(5,11,15,.6) 40%, 
+          rgba(5,11,15,.95) 100%
+        ); 
+      }
+      
+      .wc-slide { 
+        position:absolute; 
+        inset:0; 
+        opacity:0; 
+        transition: opacity .6s ease; 
+      }
+      
+      .wc-slide.is-active { 
+        opacity:1; 
+      }
 
-      /* Poster card */
-      .wc-poster-wrap { position:absolute; inset:0; display:grid; place-items:center; padding:24px; }
-      .wc-poster { width: clamp(180px, 22vw, 320px); aspect-ratio: 2 / 3; border-radius: 14px; overflow:hidden;
-                   box-shadow: 0 20px 40px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.35); }
-      .wc-poster img { width:100%; height:100%; object-fit:cover; object-position:center; display:block; }
+      /* Poster card mejorado */
+      .wc-poster-wrap { 
+        position:absolute; 
+        inset:0; 
+        display:flex; 
+        align-items:center; 
+        justify-content:center;
+        padding: 40px 24px;
+        gap: 40px;
+      }
+      
+      .wc-poster { 
+        width: clamp(200px, 25vw, 360px); 
+        aspect-ratio: 2 / 3; 
+        border-radius: 16px; 
+        overflow:hidden;
+        box-shadow: 0 25px 50px rgba(0,0,0,.6), 0 8px 20px rgba(0,0,0,.4);
+        transform: perspective(1000px) rotateY(-5deg);
+        transition: all 0.4s ease;
+      }
+      
+      .wc-poster:hover {
+        transform: perspective(1000px) rotateY(0deg) scale(1.02);
+      }
+      
+      .wc-poster img { 
+        width:100%; 
+        height:100%; 
+        object-fit:cover; 
+        object-position:center; 
+        display:block; 
+      }
 
-      /* Texto/CTA: subimos el botón y colocamos los dots debajo */
-      .wc-slide-overlay { position:absolute; left:0; right:0; bottom:0; display:flex; flex-direction:column;
-                          align-items:center; text-align:center; color:#fff; padding:14px 16px 54px; gap:10px; }
-      .wc-slide-overlay h3 { font-size: clamp(18px, 2.6vw, 36px); font-weight:800; margin:0; text-shadow: 0 2px 16px rgba(0,0,0,.4); }
-      .wc-slide-overlay p { margin:0; opacity:.95; font-size: clamp(12px, 1.4vw, 16px); }
-      .wc-slide-overlay .wc-btn { margin-top:10px; }
+      /* Contenido de texto mejorado */
+      .wc-slide-content {
+        flex: 1;
+        max-width: 500px;
+        color: white;
+        text-align: left;
+        padding: 20px;
+      }
+      
+      .wc-slide-content h3 { 
+        font-size: clamp(24px, 3.5vw, 48px); 
+        font-weight:800; 
+        margin:0 0 16px 0; 
+        text-shadow: 0 4px 20px rgba(0,0,0,.6);
+        background: linear-gradient(135deg, #fff 0%, #e2e8f0 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.1;
+      }
+      
+      .wc-slide-content p { 
+        margin:0 0 24px 0; 
+        opacity:.9; 
+        font-size: clamp(14px, 1.6vw, 18px); 
+        line-height: 1.5;
+      }
 
-      /* Controles */
-      .wc-nav { position:absolute; top:50%; transform:translateY(-50%); width:42px; height:42px; border-radius:999px; border:0;
-                background: rgba(255,255,255,.25); color:#fff; display:grid; place-items:center; cursor:pointer; backdrop-filter: blur(6px); }
-      .wc-nav:hover { background: rgba(255,255,255,.35); }
-      .wc-prev { left:14px; } .wc-next { right:14px; }
+      /* Controles mejorados */
+      .wc-nav { 
+        position:absolute; 
+        top:50%; 
+        transform:translateY(-50%); 
+        width:50px; 
+        height:50px; 
+        border-radius:50%; 
+        border:0;
+        background: rgba(255,255,255,.15); 
+        color:#fff; 
+        display:grid; 
+        place-items:center; 
+        cursor:pointer; 
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+        font-size: 18px;
+      }
+      
+      .wc-nav:hover { 
+        background: rgba(255,255,255,.25); 
+        transform: translateY(-50%) scale(1.1);
+      }
+      
+      .wc-prev { left:20px; } 
+      .wc-next { right:20px; }
 
-      /* Dots: ahora en línea, debajo del botón */
-      .wc-dots { display:flex; gap:8px; justify-content:center; margin-top:10px; }
-      .wc-dot { width:8px; height:8px; border-radius:999px; border:0; background: rgba(255,255,255,.45); cursor:pointer; }
-      .wc-dot.active { background:#fff; width:20px; }
+      /* Dots mejorados */
+      .wc-dots { 
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display:flex; 
+        gap:10px; 
+        justify-content:center; 
+      }
+      
+      .wc-dot { 
+        width:12px; 
+        height:12px; 
+        border-radius:50%; 
+        border:0; 
+        background: rgba(255,255,255,.3); 
+        cursor:pointer; 
+        transition: all 0.3s ease;
+      }
+      
+      .wc-dot.active { 
+        background:#fff; 
+        transform: scale(1.2);
+        box-shadow: 0 0 10px rgba(255,255,255,.5);
+      }
+      
+      .wc-dot:hover {
+        background: rgba(255,255,255,.6);
+      }
 
-      @media (max-width: 680px){
-        .wc-hero-box { padding-top:56%; } /* un poco más alto en móvil */
+      @media (max-width: 768px){
+        .wc-hero-box { padding-top: 70%; }
+        .wc-poster-wrap { 
+          flex-direction: column;
+          gap: 20px;
+          padding: 20px;
+        }
+        .wc-slide-content {
+          text-align: center;
+        }
+        .wc-poster {
+          transform: none;
+        }
+        .wc-nav {
+          width: 40px;
+          height: 40px;
+          font-size: 16px;
+        }
       }
     `}</style>
   );
@@ -540,31 +775,27 @@ export default function WelcomeCliente() {
   const [loading, setLoading] = useState(true);
 
   /* 1) Pintar algo al instante desde cache propia o del dashboard */
+  /* 1) Pintar algo al instante desde cache propia o del dashboard */
   useEffect(() => {
     let seeded = false;
 
-    try {
-      const raw = localStorage.getItem(WC_CACHE_KEY);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr) && arr.length) {
-          setSlides(arr);
-          seeded = true;
-          if (WC_DEBUG) console.log('[WC] usando wc_slides_cache');
-        }
-      }
-    } catch {}
+    // 1. cache (con expiración)
+    const cached = readSlidesCache();
+    if (cached?.length) {
+      setSlides(cached);
+      seeded = true;
+      if (WC_DEBUG) console.log('[WC] usando cache válida');
+    }
 
+    // 2. fuentes locales (mf_peliculas/cartelera) -> normaliza (activas + con poster)
     if (!seeded) {
       const local = readLocalPeliculas();
-      if (local?.length) {
-        const mapped = uniqByTitle(local.map(toSlide).filter(Boolean)).slice(0, 8);
-        if (mapped.length) {
-          setSlides(mapped);
-          try { localStorage.setItem(WC_CACHE_KEY, JSON.stringify(mapped)); } catch {}
-          seeded = true;
-          if (WC_DEBUG) console.log('[WC] usando mf_peliculas/cartelera');
-        }
+      const mapped = normalizeSlides(local || []);
+      if (mapped.length) {
+        setSlides(mapped);
+        writeSlidesCache(mapped);
+        seeded = true;
+        if (WC_DEBUG) console.log('[WC] usando mf_peliculas/cartelera');
       }
     }
 
@@ -572,7 +803,9 @@ export default function WelcomeCliente() {
     setLoading(false);
   }, []);
 
+
   /* 2) Intento de red: si llega, refresca y guarda */
+  /* 2) Intento de red: si llega, refresca y guarda (filtrando activas) */
   useEffect(() => {
     let stop = false;
     (async () => {
@@ -581,28 +814,28 @@ export default function WelcomeCliente() {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
+
+      // Rutas (las primeras idealmente ya devuelven solo activas)
       const routes = [
         `${API_BASE}/api/cliente/cartelera`,
-        `${API_BASE}/peliculas`,
-        `${API_BASE}/api/peliculas`,
-        `${API_BASE}/cartelera`,
-        `${API_BASE}/api/cartelera`,
         `${API_BASE}/peliculas/activas`,
         `${API_BASE}/api/peliculas/activas`,
+        `${API_BASE}/api/peliculas`,
+        `${API_BASE}/peliculas`,
+        `${API_BASE}/api/cartelera`,
+        `${API_BASE}/cartelera`,
       ];
 
       for (const url of routes) {
         try {
-          const r = await fetch(url, { headers, credentials: 'include' });
+          const r = await fetch(url, { headers, credentials: 'omit' });
           if (!r.ok) continue;
           const data = await r.json();
-          if (!Array.isArray(data) || !data.length) continue;
-
-          const mapped = uniqByTitle(data.map(toSlide).filter(Boolean)).slice(0, 8);
+          const mapped = normalizeSlides(Array.isArray(data) ? data : (data?.rows || []));
           if (!stop && mapped.length) {
             setSlides(mapped);
             setIdx(0);
-            try { localStorage.setItem(WC_CACHE_KEY, JSON.stringify(mapped)); } catch {}
+            writeSlidesCache(mapped); // cache nueva (reemplaza la vieja)
             if (WC_DEBUG) console.log('[WC] datos desde red:', url);
             return;
           }
@@ -610,14 +843,18 @@ export default function WelcomeCliente() {
           if (WC_DEBUG) console.log('[WC] fallo fetch', e);
         }
       }
+
+      // Si ninguna ruta trajo algo, y había cache vieja, al menos asegúrate
+      // de que en la próxima carga no reaparezca algo eliminado (expira sola en 6h)
     })();
     return () => { stop = true; };
   }, []);
 
+
   /* auto avance */
   useEffect(() => {
     if (!slides.length) return;
-    const id = setInterval(() => setIdx(i => (i + 1) % slides.length), 4500);
+    const id = setInterval(() => setIdx(i => (i + 1) % slides.length), 5000);
     return () => clearInterval(id);
   }, [slides]);
 
@@ -643,21 +880,25 @@ export default function WelcomeCliente() {
       <div className="wc-bg-fixed" aria-hidden="true" />
 
       <main className="wc-page" role="main" ref={pageRef}>
-        {/* ===== HERO ===== */}
+        {/* ===== HERO MEJORADO ===== */}
         <section className="wc-section">
           <div className="wc-hero wc-container">
             <div className="wc-hero-inner">
-              <div className="wc-badge"><i className="fas fa-clapperboard" /> {CINE_NAME}</div>
-              <h1>{nombre ? `¡Bienvenido, ${nombre}!` : `¡Bienvenido a ${CINE_NAME}!`}</h1>
+              <div className="wc-badge">
+                <i className="fas fa-clapperboard" /> {CINE_NAME}
+              </div>
+              <h1 className="wc-hero-title">
+                {nombre ? `¡Bienvenido, ${nombre}!` : `¡Bienvenido a ${CINE_NAME}!`}
+              </h1>
               <p className="wc-sub">
                 Vive el mejor cine con butacas premium, sonido inmersivo y tu snack favorito.
                 Compra tus boletos, gestiona tus reservas y prepárate para una función inolvidable.
               </p>
-              <div className="wc-actions">
+              <div className="wc-actions-grid">
                 <button className="wc-btn wc-btn-primary" onClick={() => navigate('/dashboard-cliente')}>
                   🎟️ Ver cartelera
                 </button>
-                <button className="wc-btn wc-btn-ghost" onClick={() => navigate('/snacks')}>
+                <button className="wc-btn wc-btn-secondary" onClick={() => navigate('/snacks')}>
                   🍿 Pedir snacks
                 </button>
                 <button className="wc-btn wc-btn-ghost" onClick={() => navigate('/mis-reservas')}>
@@ -671,11 +912,11 @@ export default function WelcomeCliente() {
           </div>
         </section>
 
-        {/* ===== CARRUSEL: fondo blur + poster 2:3 ===== */}
+        {/* ===== CARRUSEL MEJORADO ===== */}
         <section className="wc-section">
           <div className="wc-container">
             <div className="wc-section-head">
-              <h2>🎥 Estrenos y en cartelera</h2>
+              <h2>🎬 Estrenos y en cartelera</h2>
               <p>Descubre lo que se está proyectando esta semana</p>
             </div>
 
@@ -686,34 +927,47 @@ export default function WelcomeCliente() {
                     <div key={`${s.titulo}-${i}`} className={`wc-slide ${i === idx ? 'is-active' : ''}`} aria-hidden={i !== idx}>
                       {/* Fondo desenfocado */}
                       <div className="wc-hero-abs">
-                        <img src={s.src} alt="" className="wc-bg-img" loading="eager" decoding="async" />
+                        <img
+                          src={s.src}
+                          alt=""
+                          className="wc-bg-img"
+                          loading="eager"
+                          decoding="async"
+                          onError={() => dropSlide(i)}
+                        />
                         <div className="wc-hero-grad" />
                       </div>
 
-                      {/* Poster encima */}
+                      {/* Contenido principal */}
                       <div className="wc-poster-wrap">
                         <div className="wc-poster">
-                          <img src={s.src} alt={s.titulo} loading="lazy" decoding="async" />
+                          <img
+                            src={s.src}
+                            alt={s.titulo}
+                            loading="lazy"
+                            decoding="async"
+                            onError={() => dropSlide(i)}
+                          />
+                        </div>
+                        <div className="wc-slide-content">
+                          <h3>{s.titulo}</h3>
+                          <p>{s.desc}</p>
+                          <button className="wc-btn wc-btn-primary" onClick={() => navigate('/dashboard-cliente')}>
+                            Ver funciones y horarios
+                          </button>
                         </div>
                       </div>
 
-                      {/* Texto, botón (más arriba) y dots debajo */}
-                      <div className="wc-slide-overlay">
-                        <h3>{s.titulo}</h3>
-                        <p>{s.desc}</p>
-                        <button className="wc-btn wc-btn-primary" onClick={() => navigate('/dashboard-cliente')}>
-                          Ver funciones
-                        </button>
-                        <div className="wc-dots">
-                          {slides.map((_, di) => (
-                            <button
-                              key={di}
-                              className={`wc-dot ${di === idx ? 'active' : ''}`}
-                              onClick={() => setIdx(di)}
-                              aria-label={`Ir al slide ${di + 1}`}
-                            />
-                          ))}
-                        </div>
+                      {/* Dots de navegación */}
+                      <div className="wc-dots">
+                        {slides.map((_, di) => (
+                          <button
+                            key={di}
+                            className={`wc-dot ${di === idx ? 'active' : ''}`}
+                            onClick={() => setIdx(di)}
+                            aria-label={`Ir al slide ${di + 1}`}
+                          />
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -728,12 +982,17 @@ export default function WelcomeCliente() {
               </div>
             ) : (
               <div className="wc-carousel" style={{
-                background: 'radial-gradient(600px 300px at 50% -10%, #152235 0%, #0d1b2a 45%, #0b1726 100%)',
-                display:'grid', placeItems:'center'
+                background: 'linear-gradient(135deg, #152235 0%, #0d1b2a 100%)',
+                display:'grid', 
+                placeItems:'center',
+                minHeight: '400px',
+                borderRadius: '24px',
+                border: '1px solid rgba(255,255,255,.1)'
               }}>
-                <div style={{textAlign:'center', color:'#e2e8f0', padding:'20px'}}>
-                  <h3 style={{margin:'0 0 6px'}}>Aún no hay pósters para mostrar</h3>
-                  <p style={{margin:'0 0 10px', opacity:.9}}>
+                <div style={{textAlign:'center', color:'#e2e8f0', padding:'40px 20px'}}>
+                  <div style={{fontSize: '48px', marginBottom: '16px'}}>🎭</div>
+                  <h3 style={{margin:'0 0 12px', fontSize: '24px'}}>Aún no hay pósters para mostrar</h3>
+                  <p style={{margin:'0 0 24px', opacity:.9, fontSize: '16px'}}>
                     Abre la cartelera para actualizar la información (se guardará en caché).
                   </p>
                   <button className="wc-btn wc-btn-primary" onClick={() => navigate('/dashboard-cliente')}>
@@ -745,54 +1004,238 @@ export default function WelcomeCliente() {
           </div>
         </section>
 
-        {/* ===== BANNER: FUNCIÓN PRIVADA ===== */}
+        {/* ===== BANNER: FUNCIÓN PRIVADA MEJORADO ===== */}
         <EventoPrivadoBanner />
 
         {/* ===== MINI CALENDARIO ===== */}
         <MiniCalendario />
 
-        {/* ===== SERVICIOS ===== */}
+        {/* ===== SERVICIOS MEJORADOS ===== */}
         <section className="wc-section">
           <div className="wc-container">
             <div className="wc-section-head">
-              <h2>🍿 Servicios que elevan tu experiencia</h2>
+              <h2>⭐ Servicios Premium</h2>
               <p>Confort, sabor y momentos memorables en cada visita</p>
             </div>
 
             <div className="wc-services-grid">
-              <article className="wc-service">
-                <div className="wc-icon"><i className="fas fa-couch" /></div>
+              <article className="wc-service-card">
+                <div className="wc-service-icon">
+                  <i className="fas fa-couch" />
+                </div>
                 <h3>Comodidad Premium</h3>
                 <p>Butacas espaciosas, reclinables y salas climatizadas con la mejor visibilidad.</p>
               </article>
-              <article className="wc-service">
-                <div className="wc-icon"><i className="fas fa-popcorn" /></div>
+              <article className="wc-service-card">
+                <div className="wc-service-icon">
+                  <i className="fas fa-popcorn" />
+                </div>
                 <h3>Snacks Deliciosos</h3>
                 <p>Palomitas, nachos, hot dogs y bebidas frías. ¡Arma tu combo ideal!</p>
-                <button className="wc-link" onClick={() => navigate('/snacks')}>Ver menú</button>
+                <button className="wc-service-link" onClick={() => navigate('/snacks')}>
+                  Ver menú completo →
+                </button>
               </article>
-              <article className="wc-service">
-                <div className="wc-icon"><i className="fas fa-masks-theater" /></div>
+              <article className="wc-service-card">
+                <div className="wc-service-icon">
+                  <i className="fas fa-masks-theater" />
+                </div>
                 <h3>Función Privada</h3>
                 <p>Celebraciones, eventos corporativos o proyecciones exclusivas con tu grupo.</p>
-                <button className="wc-link" onClick={() => navigate('/reservar-evento')}>Reservar evento</button>
+                <button className="wc-service-link" onClick={() => navigate('/reservar-evento')}>
+                  Reservar evento →
+                </button>
               </article>
             </div>
           </div>
         </section>
 
-        {/* ===== CONTACTO ===== */}
+        {/* ===== CONTACTO MEJORADO ===== */}
         <footer className="wc-section wc-contact">
           <div className="wc-container">
-            <h2>📍 Información de contacto</h2>
-            <ul>
-              <li><strong>Ubicación:</strong> Plaza Israel, Morales, Izabal, Guatemala</li>
-              <li><strong>Celular:</strong> 3006-1980</li>
-              <li><strong>Horarios:</strong> Lun - Dom · 10:00 AM – 10:00 PM</li>
-            </ul>
+            <div className="wc-contact-grid">
+              <div className="wc-contact-info">
+                <h2>📍 Información de contacto</h2>
+                <div className="wc-contact-items">
+                  <div className="wc-contact-item">
+                    <i className="fas fa-map-marker-alt"></i>
+                    <div>
+                      <strong>Ubicación:</strong>
+                      <span>Plaza Israel, Morales, Izabal, Guatemala</span>
+                    </div>
+                  </div>
+                  <div className="wc-contact-item">
+                    <i className="fas fa-phone"></i>
+                    <div>
+                      <strong>Celular:</strong>
+                      <span>3006-1980</span>
+                    </div>
+                  </div>
+                  <div className="wc-contact-item">
+                    <i className="fas fa-clock"></i>
+                    <div>
+                      <strong>Horarios:</strong>
+                      <span>Lun - Dom · 10:00 AM – 10:00 PM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="wc-contact-actions">
+                <button className="wc-btn wc-btn-primary" onClick={() => navigate('/dashboard-cliente')}>
+                  🎬 Ver cartelera
+                </button>
+                <button className="wc-btn wc-btn-ghost" onClick={() => navigate('/snacks')}>
+                  🍿 Ordenar snacks
+                </button>
+              </div>
+            </div>
           </div>
         </footer>
       </main>
+
+      {/* Estilos adicionales para los nuevos componentes */}
+      <style>{`
+        /* Hero mejorado */
+        .wc-hero-title {
+          font-size: clamp(2.5rem, 5vw, 4rem);
+          font-weight: 800;
+          margin-bottom: 1.5rem;
+          background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          line-height: 1.1;
+        }
+        
+        .wc-actions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+          margin-top: 2rem;
+        }
+        
+        /* Servicios mejorados */
+        .wc-services-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 2rem;
+          margin-top: 2rem;
+        }
+        
+        .wc-service-card {
+          background: linear-gradient(135deg, rgba(255,255,255,.05) 0%, rgba(255,255,255,.02) 100%);
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 20px;
+          padding: 2rem;
+          text-align: center;
+          transition: all 0.3s ease;
+          backdrop-filter: blur(10px);
+        }
+        
+        .wc-service-card:hover {
+          transform: translateY(-5px);
+          border-color: rgba(255,255,255,.2);
+          box-shadow: 0 20px 40px rgba(0,0,0,.3);
+        }
+        
+        .wc-service-icon {
+          width: 80px;
+          height: 80px;
+          margin: 0 auto 1.5rem;
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 2rem;
+        }
+        
+        .wc-service-card h3 {
+          font-size: 1.5rem;
+          margin-bottom: 1rem;
+          color: white;
+        }
+        
+        .wc-service-card p {
+          color: #cbd5e1;
+          margin-bottom: 1.5rem;
+          line-height: 1.6;
+        }
+        
+        .wc-service-link {
+          background: none;
+          border: none;
+          color: #8b5cf6;
+          font-weight: 600;
+          cursor: pointer;
+          transition: color 0.3s ease;
+        }
+        
+        .wc-service-link:hover {
+          color: #a78bfa;
+        }
+        
+        /* Contacto mejorado */
+        .wc-contact-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 3rem;
+          align-items: start;
+        }
+        
+        .wc-contact-items {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+        
+        .wc-contact-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 1rem;
+        }
+        
+        .wc-contact-item i {
+          color: #8b5cf6;
+          font-size: 1.2rem;
+          margin-top: 0.2rem;
+        }
+        
+        .wc-contact-item div {
+          display: flex;
+          flex-direction: column;
+          gap: 0.2rem;
+        }
+        
+        .wc-contact-item strong {
+          color: white;
+          font-size: 1rem;
+        }
+        
+        .wc-contact-item span {
+          color: #cbd5e1;
+        }
+        
+        .wc-contact-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+          .wc-contact-grid {
+            grid-template-columns: 1fr;
+            gap: 2rem;
+          }
+          
+          .wc-actions-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .wc-services-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </>
   );
 }

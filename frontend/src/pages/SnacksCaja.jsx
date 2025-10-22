@@ -2,6 +2,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import '../styles/snacks-caja.css';
 
+// ✅ Toasts elegantes
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||
@@ -23,6 +27,18 @@ async function getJson(url, options = {}) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+// Parsear error de fetch para mostrar mensaje del backend si viene
+async function parseFetchError(e, res) {
+  // e puede ser Error simple (network) y res el Response (cuando tenemos status)
+  if (res) {
+    let payload = null;
+    try { payload = await res.clone().json(); } catch { try { payload = { message: await res.text() }; } catch {} }
+    const msg = payload?.message || payload?.error || `HTTP ${res.status}`;
+    return { status: res.status, message: msg };
+  }
+  return { status: 0, message: e?.message || 'Error de red' };
 }
 
 // ---------- normalizadores ----------
@@ -118,7 +134,7 @@ export default function SnacksCaja() {
     }
   };
 
-  // Cambiar estado: PENDIENTE -> ACEPTADO -> ENTREGADO
+  // Cambiar estado: PENDIENTE -> ACEPTADO -> ENTREGADO (con toasts)
   const avanzar = async (id, current) => {
     const next = current === 'PENDIENTE' ? 'ACEPTADO' : 'ENTREGADO';
     try {
@@ -127,10 +143,27 @@ export default function SnacksCaja() {
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ estado: next }),
       });
-      if (!r.ok) throw new Error(await r.text());
+
+      if (!r.ok) {
+        const err = await parseFetchError(new Error('fetch error'), r);
+        // 409: sin caja abierta (no Taquilla)
+        if (err.status === 409) {
+          toast.warn(err.message || 'Debe tener una caja abierta (no Taquilla) para continuar.', {
+            position: 'bottom-right', theme: 'dark',
+          });
+        } else {
+          toast.error(err.message || 'No se pudo actualizar el estado.', { position: 'bottom-right', theme: 'dark' });
+        }
+        return;
+      }
+
+      // Éxito
+      toast.success(next === 'ACEPTADO' ? 'Pedido aceptado.' : 'Pedido entregado y registrado en caja.', {
+        position: 'bottom-right', theme: 'dark',
+      });
       await loadPedidos();
     } catch (e) {
-      alert('No se pudo actualizar el estado: ' + (e?.message || 'Error'));
+      toast.error(e?.message || 'Error de red', { position: 'bottom-right', theme: 'dark' });
     }
   };
 
@@ -158,6 +191,9 @@ export default function SnacksCaja() {
 
   return (
     <div className="sc-page">
+      {/* Contenedor de toasts */}
+      <ToastContainer newestOnTop />
+
       {/* Estilo de selects/option para que el texto sea legible en el desplegable */}
       <style>{`
         .sc-select {

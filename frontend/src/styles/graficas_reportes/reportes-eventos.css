@@ -1,0 +1,134 @@
+.revent-container {
+  padding: 16px;
+}
+
+.revent-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.revent-header h2 {
+  margin: 0;
+  font-weight: 700;
+}
+
+.revent-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(160px, 1fr)) 120px;
+  gap: 10px;
+  align-items: end;
+}
+
+.revent-filters label {
+  display: block;
+  font-size: 12px;
+  opacity: .8;
+  margin-bottom: 4px;
+}
+
+.revent-filters input,
+.revent-filters select {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.08);
+  padding: 0 10px;
+  background: #fff;
+}
+
+.revent-filters button {
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  padding: 0 14px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+  box-shadow: 0 2px 6px rgba(124,58,237,.3);
+}
+
+.revent-filters .grow { grid-column: span 2; }
+
+.revent-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 10px 0 16px;
+}
+
+.kpi-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+  border: 1px solid rgba(124,58,237,.10);
+  color: #333;
+}
+
+.kpi-card p {
+  font-size: 11px;
+  letter-spacing: .5px;
+  margin: 0 0 6px;
+  color: #666;
+  font-weight: 600;
+}
+
+.kpi-card h3 {
+  margin: 0;
+  font-size: 28px;
+  color: inherit;
+}
+
+.kpi-sub {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #888;
+}
+
+.revent-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+  border: 1px solid rgba(0,0,0,.06);
+  overflow: hidden;
+}
+
+.card-title {
+  padding: 12px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.card-chart {
+  height: 260px;
+  padding: 10px 12px 4px;
+}
+
+.card-chart.big {
+  height: 340px;
+}
+
+/* responsive */
+@media (max-width: 1100px) {
+  .revent-filters {
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: auto;
+  }
+  .revent-filters .grow { grid-column: span 3; }
+  .revent-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .revent-grid2 {
+    grid-template-columns: 1fr;
+  }
+}
