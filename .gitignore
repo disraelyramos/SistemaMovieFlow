@@ -3,3 +3,29 @@
 /frontend/dist/
 /frontend/.env
 /frontend/.env.*
+<<<<<<< HEAD
+
+/backend-movieflow/node_modules/
+/backend-movieflow/.env
+/backend-movieflow/.env.*
+
+# runtime que SÍ tienes
+/backend-movieflow/uploads/*
+!/backend-movieflow/uploads/.gitkeep
+
+# ===== Generales =====
+/node_modules/
+/.env
+/.env.*
+*.log
+npm-debug.log*
+yarn-*.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Ignorar credenciales Firebase en cualquier carpeta
+firebaseServiceAccount.json
+firebase*.json
+=======
+>>>>>>> parent of a5ae08a5 (add backend without firebase service account)
