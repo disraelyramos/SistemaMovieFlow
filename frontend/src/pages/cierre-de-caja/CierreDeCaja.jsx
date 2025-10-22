@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { confirmarAccion } from "../../utils/confirmations";
 import "../../styles/cierre-de-caja/cierredecaja.css";
-import VerificarAdmin from "../../components/verificacion/verificarAdmin";
+import VerificarAdmin from "../../components/verificacion/VerificarAdmin";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
