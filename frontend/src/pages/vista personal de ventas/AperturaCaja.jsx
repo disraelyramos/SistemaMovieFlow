@@ -6,7 +6,6 @@ import "react-toastify/dist/ReactToastify.css";
 import "../../styles/personal de ventas/aperturaCaja.css";
 import VerificarAdmin from "../../components/verificacion/VerificarAdmin";
 
-
 const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||

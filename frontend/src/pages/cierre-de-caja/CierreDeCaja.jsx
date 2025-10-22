@@ -6,6 +6,7 @@ import { confirmarAccion } from "../../utils/confirmations";
 import "../../styles/cierre-de-caja/CierredeCaja.css";
 import VerificarAdmin from "../../components/verificacion/VerificarAdmin";
 
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 const API_CIERRE = `${API_BASE}/api/cierre-de-caja`; // ⬅️ prefijo único y canónico
 
