@@ -16,7 +16,7 @@ async function exportarPDF({ filtros, rows, total }) {
   URL.revokeObjectURL(link.href);
 }
 
-/* === helper: descarga Excel desde el backend === */
+
 async function exportarExcel({ filtros, rows }) {
   const url = `${API_BASE}/api/excel/detalles-venta/excel`;
   const { data } = await axios.post(url, { filtros, rows }, { responseType: "blob" });
