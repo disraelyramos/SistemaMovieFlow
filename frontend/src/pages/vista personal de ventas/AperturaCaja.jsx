@@ -5,7 +5,7 @@ import { confirmarAccion } from "../../utils/confirmations"; // Confirmación Sw
 import { Link, useLocation } from "react-router-dom";
 import "react-toastify/dist/ReactToastify.css";
 import "../../styles/personal de ventas/aperturaCaja.css";
-import VerificarAdmin from "../../components/Verificacion/verificarAdmin";
+import VerificarAdmin from "../../components/verificacion/VerificarAdmin";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
