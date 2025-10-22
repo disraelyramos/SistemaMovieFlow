@@ -2,7 +2,8 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import axios from "axios";
 // en src/pages/ResumendeVentas.jsx
-import "./styles/CortedeCaja.css";
+import "../styles/CortedeCaja.css";
+
 
 
 
