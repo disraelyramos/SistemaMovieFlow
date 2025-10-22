@@ -4,7 +4,8 @@ import { toast } from "react-toastify";
 import { confirmarAccion } from "../../utils/confirmations";
 import "react-toastify/dist/ReactToastify.css";
 import "../../styles/personal de ventas/aperturaCaja.css";
-import VerificarAdmin from "../../components/verificacion/verificarAdmin";
+import VerificarAdmin from "../../components/verificacion/VerificarAdmin";
+
 
 const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
