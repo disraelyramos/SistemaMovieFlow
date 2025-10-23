@@ -27,5 +27,9 @@ Thumbs.db
 # Ignorar credenciales Firebase en cualquier carpeta
 firebaseServiceAccount.json
 firebase*.json
+
+
+src/config/wallet/
+
 =======
 >>>>>>> parent of a5ae08a5 (add backend without firebase service account)
