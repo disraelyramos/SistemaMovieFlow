@@ -22,7 +22,8 @@ app.use(cors({
   ],
 }));
 app.use(express.json());
-app.options('*', cors());
+app.options('(.*)', cors());
+
 
 /* ===== helper para detectar módulos mal exportados ===== */
 function ensureRouter(mod, name) {
