@@ -172,7 +172,6 @@ app.use('/api/actualizar-producto', actualizarProductoRoutes);
 app.use('/api/productos', nuevoProductoRoutes);
 app.use('/api/lotes', lotesRoutes);
 app.use('/api/estados-productos', estadosProductosRoutes);
-app.use('/api/debug', debugFirebaseRoutes);
 app.use('/api/producto-por-lote', require('./src/routes/inventario/productoPorLote.routes'));
 app.use('/api', combosRoutes);
 app.use("/api/personal-ventas", personalVentasRoutes);
