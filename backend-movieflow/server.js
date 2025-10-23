@@ -22,7 +22,7 @@ app.use(cors({
   ],
 }));
 app.use(express.json());
-app.options('/(.*)', cors());  // ✅ válido en Express 5 (path-to-regexp v6)
+
 
 
 
