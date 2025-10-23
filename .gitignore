@@ -27,7 +27,4 @@ Thumbs.db
 firebaseServiceAccount.json
 firebase*.json
 
-
-
-# Ignorar wallet de Oracle
 src/config/wallet/
