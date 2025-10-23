@@ -50,7 +50,6 @@ const actualizarProductoRoutes = require('./src/routes/actualizar-producto.route
 const nuevoProductoRoutes = require('./src/routes/nuevoproducto.routes');
 const lotesRoutes = require('./src/routes/lotes.routes');
 const estadosProductosRoutes = require('./src/routes/estados-productos.routes');
-const debugFirebaseRoutes = require('./src/routes/debug.firebase.routes');
 const combosRoutes = require('./src/routes/combo/combo.routes');
 const personalVentasRoutes = require("./src/routes/ventas/personal-ventas.routes");
 const cajaRoutes = require("./src/routes/caja/caja.routes");
