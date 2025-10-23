@@ -22,7 +22,8 @@ app.use(cors({
   ],
 }));
 app.use(express.json());
-app.options('(.*)', cors());
+app.options('/(.*)', cors());  // ✅ válido en Express 5 (path-to-regexp v6)
+
 
 
 /* ===== helper para detectar módulos mal exportados ===== */
