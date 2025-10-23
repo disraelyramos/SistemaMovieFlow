@@ -77,7 +77,7 @@ const filtrosRoutes = require('./src/routes/filters.routes');
 const pdfBoletosRoutes = require("./src/routes/pdf/pdfboletos.routes");
 const excelBoletosRoutes = require("./src/routes/excel/boletos.routes");
 const { startAutoCancelJob } = require('./src/jobs/autoCancelEventos.job');
-startAutoCancelJob(); // inicia el job
+//startAutoCancelJob(); // inicia el job
 const ventasBoletos = require('./src/routes/ventasBoletos');
 
 // ✅ con 'src' como el resto de rutas
