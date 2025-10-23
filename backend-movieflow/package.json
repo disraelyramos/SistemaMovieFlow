@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
+    "adm-zip": "^0.5.16",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
@@ -25,7 +26,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
-    "oracledb": "^6.9.0",
+    "oracledb": "^6.10.0",
     "pdfkit": "^0.17.2",
     "pdfmake": "^0.2.20",
     "qrcode": "^1.5.4",
