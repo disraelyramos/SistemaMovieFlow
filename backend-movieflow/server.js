@@ -2,7 +2,6 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const { getConnection } = require('./src/config/db');
 
 
 const app = express();
@@ -370,32 +369,6 @@ app.get('/api/compras', async (req, res) => {
 /* ==================== Archivos estáticos ==================== */
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-
-// --- RUTAS DE DIAGNÓSTICO ---
-// IP pública de salida del servidor (para agregarla a la ACL de OCI)
-app.get('/debug/egress-ip', async (_req, res) => {
-  try {
-    const r = await fetch('https://ifconfig.me/ip');
-    const ip = (await r.text()).trim();
-    res.type('text/plain').send(ip);
-  } catch (e) {
-    res.status(500).type('text/plain').send(String(e));
-  }
-});
-
-// Ping a Oracle para confirmar conexión desde el entorno (Railway)
-app.get('/db-ping', async (_req, res) => {
-  try {
-    const conn = await getConnection();
-    const result = await conn.execute('select 1 as OK from dual');
-    await conn.close();
-    res.json(result.rows); // [[1]] si todo ok
-  } catch (e) {
-    res.status(500).type('text/plain').send(String(e));
-  }
-});
-
 
 /* ==================== Puerto ==================== */
 const PORT = process.env.PORT || 3001;
