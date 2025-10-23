@@ -1,13 +1,24 @@
-// config/db.js
 const oracledb = require('oracledb');
-require('dotenv').config();
 
 async function getConnection() {
-    return await oracledb.getConnection({
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        connectString: process.env.DB_CONNECTION_STRING,
+  try {
+    const connectString = process.env.ORACLE_CONNECT_STRING;
+    const user = process.env.ORACLE_USER;
+    const password = process.env.ORACLE_PASSWORD;
+
+    const connection = await oracledb.getConnection({
+      user,
+      password,
+      connectString,
     });
+
+    console.log('✅ Conectado exitosamente a Oracle Autonomous Database');
+    return connection;
+
+  } catch (err) {
+    console.error('❌ Error de conexión a Oracle:', err);
+    throw err;
+  }
 }
 
-module.exports = { getConnection }; // ✅ ¡IMPORTANTE!
+module.exports = { getConnection };
