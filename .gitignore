@@ -3,7 +3,6 @@
 /frontend/dist/
 /frontend/.env
 /frontend/.env.*
-<<<<<<< HEAD
 
 /backend-movieflow/node_modules/
 /backend-movieflow/.env
@@ -29,8 +28,4 @@ firebaseServiceAccount.json
 firebase*.json
 
 
-src/config/wallet/
-
-=======
->>>>>>> parent of a5ae08a5 (add backend without firebase service account)
 src/config/wallet/
