@@ -63,11 +63,9 @@ const getProductoImgCandidates = (p) => {
   // 0) Si viene una URL directa (http, /ruta, data:), normalizar a absoluta
   if (isDirectUrl(urlField)) candidates.push(toAbs(urlField));
 
+  // ✅ Mantener solo la ruta real disponible en el backend para evitar 404
   if (id) {
-    candidates.push(`${API_BASE}/api/productos/${encodeURIComponent(id)}/imagen${ts}`); // <-- NUEVO
-    candidates.push(`${API_BASE}/api/nuevoproducto/${encodeURIComponent(id)}/imagen${ts}`);
-    candidates.push(`${API_BASE}/api/pos/producto-nuevo/${encodeURIComponent(id)}/imagen${ts}`);
-    candidates.push(`${API_BASE}/api/personal-ventas/productos/${encodeURIComponent(id)}/imagen${ts}`);
+    candidates.push(`${API_BASE}/api/productos/${encodeURIComponent(id)}/imagen${ts}`);
   }
   return candidates;
 };
@@ -117,8 +115,11 @@ function SecureImage({ candidates, alt = "", className = "", style = {} }) {
       toRevoke = url;
     })();
     return () => {
-      if (toRevoke && toRevoke.startsWith("blob:")) URL.revokeObjectURL(toRevoke);
+      if (toRevoke && typeof toRevoke === "string" && toRevoke.startsWith("blob:")) {
+        URL.revokeObjectURL(toRevoke);
+      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(candidates)]);
 
   if (!src) return <div style={{ width: "100%", height: "100%", opacity: 0.2 }} />;
@@ -223,7 +224,8 @@ export default function ProductGallery({
         const cats = Array.isArray(catProdRes.data) ? catProdRes.data : catProdRes.data?.data || [];
         setCategoriasProducto(cats);
 
-        const productosNormalizados = (prodRes.data || prodRes.data?.data || []).map(mapProducto);
+        const productosNormalizados =
+          (prodRes.data || prodRes.data?.data || []).map(mapProducto);
         // Oculta los que pertenezcan a la categoría de combos
         setProductos(productosNormalizados.filter((x) => !isCategoryCombo(x)));
       } catch (err) {
@@ -270,7 +272,8 @@ export default function ProductGallery({
       const byCat =
         activeFilter === "todos" ||
         (activeFilter !== "combos" &&
-          String(p.categoriaNombre || "").toLowerCase() === String(activeFilter).toLowerCase());
+          String(p.categoriaNombre || "").toLowerCase() ===
+            String(activeFilter).toLowerCase());
       const byTxt = !txt || String(p.nombre || "").toLowerCase().includes(txt);
       return byCat && byTxt;
     });
@@ -303,17 +306,24 @@ export default function ProductGallery({
       </div>
 
       <div className="card-body d-flex flex-column">
-        <div className="pill-row mb-2" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+        <div
+          className="pill-row mb-2"
+          style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}
+        >
           <button
             type="button"
-            className={`btn btn-sm ${activeFilter === "combos" ? "btn-primary" : "btn-outline-primary"}`}
+            className={`btn btn-sm ${
+              activeFilter === "combos" ? "btn-primary" : "btn-outline-primary"
+            }`}
             onClick={() => setActiveFilter("combos")}
           >
             Combos
           </button>
           <button
             type="button"
-            className={`btn btn-sm ${activeFilter === "todos" ? "btn-primary" : "btn-outline-primary"}`}
+            className={`btn btn-sm ${
+              activeFilter === "todos" ? "btn-primary" : "btn-outline-primary"
+            }`}
             onClick={() => setActiveFilter("todos")}
           >
             Todos
@@ -325,7 +335,9 @@ export default function ProductGallery({
               <button
                 key={id ?? name}
                 type="button"
-                className={`btn btn-sm ${activeFilter === name ? "btn-primary" : "btn-outline-primary"}`}
+                className={`btn btn-sm ${
+                  activeFilter === name ? "btn-primary" : "btn-outline-primary"
+                }`}
                 onClick={() => setActiveFilter(name)}
               >
                 {name}
@@ -337,17 +349,26 @@ export default function ProductGallery({
         {/* Buscador (aplica a ambos) */}
         <input
           className="form-control mb-2"
-          placeholder={activeFilter === "combos" ? "Buscar combos por nombre..." : "Buscar productos..."}
+          placeholder={
+            activeFilter === "combos"
+              ? "Buscar combos por nombre..."
+              : "Buscar productos..."
+          }
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
 
-        <div className="gallery-viewport" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div
+          className="gallery-viewport"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
+        >
           {activeFilter === "combos" ? (
             <>
               <h6 className="mb-2">Combos</h6>
               <div className="gallery-grid">
-                {loadingCombos && <div className="text-muted">Cargando combos…</div>}
+                {loadingCombos && (
+                  <div className="text-muted">Cargando combos…</div>
+                )}
                 {!loadingCombos && combos.length === 0 && (
                   <div className="text-muted">No hay combos registrados.</div>
                 )}
@@ -383,7 +404,9 @@ export default function ProductGallery({
                         )}
                       </div>
                       <div className="prod-name">{c.nombre}</div>
-                      <div className="prod-price">Q{toNumberSafe(c.precio ?? c.precioVenta).toFixed(2)}</div>
+                      <div className="prod-price">
+                        Q{toNumberSafe(c.precio ?? c.precioVenta).toFixed(2)}
+                      </div>
 
                       {c.descripcion && (
                         <div className="prod-meta" style={{ opacity: 0.8 }}>
@@ -410,13 +433,21 @@ export default function ProductGallery({
                   <button
                     key={p.id}
                     type="button"
-                    className={`prod-card ${isSelected ? "selected" : ""} ${disabled ? "disabled" : ""}`}
+                    className={`prod-card ${isSelected ? "selected" : ""} ${
+                      disabled ? "disabled" : ""
+                    }`}
                     onClick={() => handlePick(p, disabled)}
                     aria-disabled={disabled}
                     tabIndex={disabled ? -1 : 0}
-                    title={disabled ? "No disponible para agregar" : "Agregar al combo"}
+                    title={
+                      disabled ? "No disponible para agregar" : "Agregar al combo"
+                    }
                   >
-                    {badgeText && <span className={`estado-badge ${badgeClass}`}>{badgeText}</span>}
+                    {badgeText && (
+                      <span className={`estado-badge ${badgeClass}`}>
+                        {badgeText}
+                      </span>
+                    )}
                     <div className="prod-thumb">
                       {candidates.length > 0 ? (
                         <SecureImage candidates={candidates} alt={p.nombre} />
@@ -427,7 +458,8 @@ export default function ProductGallery({
                       Q{toNumberSafe(p.precio ?? p.precioVenta).toFixed(2)}
                     </div>
                     <div className="prod-meta">
-                      Cantidad: {p.cantidad} {p.unidadMedida ? `| ${p.unidadMedida}` : ""}
+                      Cantidad: {p.cantidad}{" "}
+                      {p.unidadMedida ? `| ${p.unidadMedida}` : ""}
                     </div>
                     {!badgeText && p.alerta && (
                       <div className="prod-meta" style={{ opacity: 0.75 }}>
