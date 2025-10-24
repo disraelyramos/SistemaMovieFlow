@@ -11,7 +11,6 @@ const API_BASE =
   import.meta?.env?.VITE_API_URL ||
   '';
 
-
 const authHeaders = () => {
   const t = localStorage.getItem('mf_token');
   return t ? { Authorization: `Bearer ${t}` } : {};
