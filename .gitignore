@@ -8,9 +8,7 @@
 /backend-movieflow/.env
 /backend-movieflow/.env.*
 
-# runtime que SÍ tienes
-/backend-movieflow/uploads/*
-!/backend-movieflow/uploads/**
+
 
 
 # ===== Generales =====
