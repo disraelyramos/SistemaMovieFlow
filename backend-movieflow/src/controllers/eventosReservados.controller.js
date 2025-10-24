@@ -65,7 +65,7 @@ const parseHoraMin = (v) => {
 async function _fetchFuncionesDiaSala(conn, salaId, dayStart) {
   const base = (colSala) => `
     SELECT FECHA, HORA_INICIO, HORA_FINAL, NVL(ESTADO,'VIGENTE') AS ESTADO
-      FROM ESTUDIANTE.FUNCIONES F
+      FROM FUNCIONES F
      WHERE F.${colSala} = :sid
        AND TRUNC(F.FECHA) = TRUNC(:dayStart)
   `;
@@ -82,7 +82,7 @@ async function _fetchFuncionesDiaSala(conn, salaId, dayStart) {
 async function _fetchEventosDiaSala(conn, salaId, dayStart) {
   const base = (colSala) => `
     SELECT START_TS, END_TS, NVL(ESTADO,'RESERVADO') AS ESTADO
-      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
+      FROM EVENTOS_ESPECIALES E
      WHERE E.${colSala} = :sid
        AND UPPER(TRIM(NVL(E.ESTADO,'RESERVADO'))) <> 'CANCELADO'
        AND TRUNC(E.START_TS) = TRUNC(:dayStart)
@@ -100,7 +100,7 @@ async function _fetchEventosDiaSala(conn, salaId, dayStart) {
 async function _fetchEventosSolape(conn, salaId, startTs, endTs) {
   const base = (colSala) => `
     SELECT START_TS, END_TS, NVL(ESTADO,'RESERVADO') AS ESTADO
-      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
+      FROM EVENTOS_ESPECIALES E
      WHERE E.${colSala} = :sid
        AND UPPER(TRIM(NVL(E.ESTADO,'RESERVADO'))) <> 'CANCELADO'
        AND NOT (E.END_TS <= :startTs OR E.START_TS >= :endTs)
@@ -201,7 +201,7 @@ async function crearEventoReservado(req, res) {
 
     // Insert con RETURNING (captura ID aunque lo asigne un trigger)
     const result = await conn.execute(
-      `INSERT INTO ESTUDIANTE.EVENTOS_ESPECIALES
+      `INSERT INTO EVENTOS_ESPECIALES
          (SALA_ID, START_TS, END_TS, DURACION_MIN, PERSONAS, NOTAS, ESTADO, CLIENTE_ID)
        VALUES
          (:salaId, :startTs, :endTs, :duracionMin, :personas, :notas, 'RESERVADO', :clienteId)
@@ -268,8 +268,8 @@ async function listarEventosReservados(req, res) {
            E.CLIENTE_ID                                       AS CLIENTE_ID,
            E.CLIENTE_ID                                       AS "clienteId",
            E.CREATED_AT                                       AS CREATED_AT
-      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
- LEFT JOIN ESTUDIANTE.SALAS S
+      FROM EVENTOS_ESPECIALES E
+ LEFT JOIN SALAS S
         ON S.${salaIdCol} = E.SALA_ID
      ${where}
      ${order}`;
@@ -279,7 +279,7 @@ async function listarEventosReservados(req, res) {
 
     // Auto-finalizar vencidos
     await conn.execute(
-      `UPDATE ESTUDIANTE.EVENTOS_ESPECIALES E
+      `UPDATE EVENTOS_ESPECIALES E
           SET E.ESTADO = 'FINALIZADO'
         WHERE E.END_TS <= SYSTIMESTAMP
           AND UPPER(TRIM(NVL(E.ESTADO,'RESERVADO'))) = 'RESERVADO'`,
@@ -350,7 +350,7 @@ async function listarMisEventos(req, res) {
     const pagoExistsSQL = hasPagoTbl
       ? `CASE WHEN EXISTS (
              SELECT 1
-               FROM ${'ESTUDIANTE.POS_PAGO_EVENTO'} p
+               FROM ${'POS_PAGO_EVENTO'} p
               WHERE p.EVENTO_ID = E.ID_EVENTO
                 AND NVL(UPPER(p.ESTADO),'X') IN ('PAGADO','CONFIRMADO')
            ) THEN 1 ELSE 0 END AS PAGADO`
@@ -376,8 +376,8 @@ async function listarMisEventos(req, res) {
              NVL(E.ESTADO,'RESERVADO')                     AS "estado",
              E.CLIENTE_ID                                  AS "clienteId",
              ${pagoExistsSQL}
-        FROM ESTUDIANTE.EVENTOS_ESPECIALES E
-   LEFT JOIN ESTUDIANTE.SALAS S
+        FROM EVENTOS_ESPECIALES E
+   LEFT JOIN SALAS S
           ON S.${salaIdCol} = E.SALA_ID
        ${where}
     ORDER BY E.START_TS DESC`;
@@ -419,7 +419,7 @@ async function actualizarEventoReservado(req, res) {
   try {
     conn = await getConnection();
     await conn.execute(
-      `UPDATE ESTUDIANTE.EVENTOS_ESPECIALES
+      `UPDATE EVENTOS_ESPECIALES
           SET
             SALA_ID      = COALESCE(:salaId, SALA_ID),
             START_TS     = COALESCE(:startTs, START_TS),
@@ -461,7 +461,7 @@ async function getPagoTableName(conn) {
   const hasUser = (qUser.rows?.[0]?.N || qUser.rows?.[0]?.n || 0) > 0;
   const hasEst  = (qAll.rows?.[0]?.N  || qAll.rows?.[0]?.n  || 0) > 0;
   if (hasUser) return 'POS_PAGO_EVENTO';
-  if (hasEst)  return 'ESTUDIANTE.POS_PAGO_EVENTO';
+  if (hasEst)  return 'POS_PAGO_EVENTO';
   return null;
 }
 
@@ -475,7 +475,7 @@ async function cancelarEventoReservado(req, res) {
 
     const info = await conn.execute(
       `SELECT ID_EVENTO, START_TS, NVL(ESTADO,'RESERVADO') AS ESTADO
-         FROM ESTUDIANTE.EVENTOS_ESPECIALES
+         FROM EVENTOS_ESPECIALES
         WHERE ID_EVENTO = :id`,
       { id: Number(id) }
     );
@@ -504,11 +504,11 @@ async function cancelarEventoReservado(req, res) {
     }
 
     try {
-      await conn.execute(`BEGIN ESTUDIANTE.PR_EVT_CANCELAR(:id); END;`, { id: Number(id) }, { autoCommit: true });
+      await conn.execute(`BEGIN PR_EVT_CANCELAR(:id); END;`, { id: Number(id) }, { autoCommit: true });
       return res.json({ ok: true, via: 'SP' });
     } catch {
       await conn.execute(
-        `UPDATE ESTUDIANTE.EVENTOS_ESPECIALES
+        `UPDATE EVENTOS_ESPECIALES
             SET ESTADO = 'CANCELADO'
           WHERE ID_EVENTO = :id`,
         { id: Number(id) },
@@ -636,8 +636,8 @@ async function comprobantePdfEvento(req, res) {
                 E.START_TS, E.END_TS, E.DURACION_MIN,
                 E.PERSONAS, E.NOTAS, NVL(E.ESTADO,'RESERVADO') AS ESTADO,
                 S.NOMBRE AS SALA_NOMBRE
-           FROM ESTUDIANTE.EVENTOS_ESPECIALES E
-      LEFT JOIN ESTUDIANTE.SALAS S ON S.ID_SALA = E.SALA_ID
+           FROM EVENTOS_ESPECIALES E
+      LEFT JOIN SALAS S ON S.ID_SALA = E.SALA_ID
           WHERE E.ID_EVENTO = :id`,
         { id }
       );
@@ -650,8 +650,8 @@ async function comprobantePdfEvento(req, res) {
                 E.START_TS, E.END_TS, E.DURACION_MIN,
                 E.PERSONAS, E.NOTAS, NVL(E.ESTADO,'RESERVADO') AS ESTADO,
                 S.NOMBRE AS SALA_NOMBRE
-           FROM ESTUDIANTE.EVENTOS_ESPECIALES E
-      LEFT JOIN ESTUDIANTE.SALAS S ON S.ID = E.SALA_ID
+           FROM EVENTOS_ESPECIALES E
+      LEFT JOIN SALAS S ON S.ID = E.SALA_ID
           WHERE E.ID_EVENTO = :id`,
         { id }
       );
