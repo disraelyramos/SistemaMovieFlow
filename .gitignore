@@ -10,7 +10,8 @@
 
 # runtime que SÍ tienes
 /backend-movieflow/uploads/*
-!/backend-movieflow/uploads/.gitkeep
+!/backend-movieflow/uploads/**
+
 
 # ===== Generales =====
 /node_modules/
