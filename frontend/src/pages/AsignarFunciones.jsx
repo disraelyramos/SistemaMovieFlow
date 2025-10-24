@@ -10,15 +10,6 @@ import ModalEventoReservado from "../components/ModalEventoReservado";
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
-// Helper: garantiza URL absoluta para imágenes/posters
-const toAbsoluteUrl = (p = '') => {
-  const s = String(p || '');
-  if (!s) return s;
-  if (/^https?:\/\//i.test(s)) return s;                 // ya es absoluta
-  if (s.startsWith('/')) return `${API_BASE}${s}`;        // /uploads/archivo.jpg
-  return `${API_BASE}/uploads/${encodeURIComponent(s)}`;  // nombre suelto -> /uploads/nombre
-};
-
 // HH:MM -> minutos
 const toMinutes = (hhmm='') => { const [h,m] = String(hhmm).split(':').map(Number); return (h||0)*60+(m||0); };
 
@@ -84,7 +75,7 @@ export default function ProgramarFunciones() {
           titulo:f.peliculaTitulo||'',
           formato:f.formato||'',
           precio:Number(f.precio||0),
-          poster: toAbsoluteUrl(f.imagenUrl||''), // 👈 aquí se asegura URL absoluta
+          poster:f.imagenUrl||'',
           // estos ayudan a precargar catálogos en el modal
           peliculaId: Number(f.peliculaId ?? f.idPelicula ?? f.ID_PELICULA ?? 0),
           formatoId:  Number(f.formatoId  ?? f.idFormato  ?? f.ID_FORMATO  ?? 0),
