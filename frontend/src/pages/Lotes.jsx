@@ -3,16 +3,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FaPlus, FaTags, FaSave } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import '../styles/categorias.css'; // reutilizamos estilos
+import '../styles/categorias.css'; 
 
-/* ===== API base (alineado a tu proyecto) ===== */
 const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||
   import.meta?.env?.VITE_API_URL ||
-  'http://localhost:3001';
+  '';
 
-/* ===== Helpers Auth / Axios ===== */
+
 const authHeaders = () => {
   const t = localStorage.getItem('mf_token');
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -71,8 +70,6 @@ const Lotes = () => {
       setLoading(false);
     }
   };
-
-  /* ===== Código local (solo visual) ===== */
   const generarCodigoLocal = () => {
     const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
     const siguiente = String(lotesNuevos.length + 1).padStart(3, '0');
@@ -256,3 +253,6 @@ const Lotes = () => {
 };
 
 export default Lotes;
+
+
+
