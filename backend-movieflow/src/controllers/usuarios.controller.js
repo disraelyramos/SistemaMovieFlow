@@ -9,19 +9,19 @@ const OUT_OBJ = { outFormat: oracledb.OUT_FORMAT_OBJECT };
 function validarContrasena(pwd = '') {
   if (typeof pwd !== 'string') return 'La contraseña es inválida.';
   const errores = [];
-  if (pwd.length < 10) errores.push('tener al menos 10 caracteres');
+  // 🔻 Regla de longitud removida (antes: pwd.length < 10)
   if (!/[A-Z]/.test(pwd)) errores.push('incluir al menos una letra mayúscula');
   if (!/[a-z]/.test(pwd)) errores.push('incluir al menos una letra minúscula');
   if (!/\d/.test(pwd)) errores.push('incluir al menos un número');
   if (!/[^A-Za-z0-9]/.test(pwd)) errores.push('incluir al menos un carácter especial (p. ej.: !@#$%&*)');
 
   if (errores.length) {
-    // Une con coma y "y" final para mensaje claro
     const detalle = errores.join(', ').replace(/, ([^,]*)$/, ' y $1');
     return `La contraseña debe ${detalle}.`;
   }
   return null;
 }
+
 /* ================================================================ */
 
 // ✅ GET: usuarios con nombre de estado y rol (sin PASSWORD_HASH)
