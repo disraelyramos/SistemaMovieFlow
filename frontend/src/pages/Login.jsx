@@ -82,13 +82,13 @@ const Login = () => {
   // === Login con Google (clientes externos) — SIN cambios fuera de alcance ===
   const handleGoogleSuccess = async (googleResponse) => {
     try {
-      const id_token =
-        googleResponse?.credential ||
-        googleResponse?.idToken ||
-        googleResponse?.token;
-      if (!id_token) return setErrorMsg('ID Token requerido');
+      // ✅ Corrección: Google devuelve "credential"
+      const idToken = googleResponse?.credential;
+      if (!idToken) return setErrorMsg('ID Token requerido');
 
-      const payload = { id_token, idToken: id_token, credential: id_token };
+      // ✅ Payload unificado
+      const payload = { idToken };
+
       let data;
       try {
         data = (
