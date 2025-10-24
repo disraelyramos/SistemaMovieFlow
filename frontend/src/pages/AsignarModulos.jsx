@@ -1,293 +1,228 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Users, Plus, Settings, Check, X, Eye, Save
-} from 'lucide-react';
-import axios from 'axios';
-import { toast } from 'react-toastify';
-import '../styles/asignar-modulos.css';
-import ModalNuevoRol from '../components/Asignacion-Modulos';
+import React, { useState, useEffect, memo, useContext } from "react";
+import { FiEye, FiEyeOff, FiLock } from "react-icons/fi";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../../contexts/AuthContext";
+import "../../styles/actualizar-contrasena.css"; // ⬅️ CSS externo
 
-const AsignarModulos = () => {
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [checkboxStates, setCheckboxStates] = useState({});
-  const [roles, setRoles] = useState([]);
-  const [modulos, setModulos] = useState([]);
-  const [conteoPermisos, setConteoPermisos] = useState([]);
+const BG_URL = "/img/bg-cinema.jpg";
 
-  const formatearNombre = (texto) => {
-    return texto.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-  };
+/* ====== BASE API (prod: Netlify env | dev: localhost) ====== */
+const API_BASE =
+  import.meta.env?.VITE_API_BASE ||
+  import.meta.env?.VITE_API_BASE_URL ||
+  (import.meta.env?.MODE === "development" ? "http://localhost:3001" : "");
 
-  const cargarRoles = async () => {
-    try {
-      const response = await axios.get('http://localhost:3001/api/roles');
-      setRoles(response.data);
-    } catch (error) {
-      console.error('Error al cargar los roles:', error);
-    }
-  };
-
-  const cargarModulosYSubmodulos = async () => {
-    try {
-      const response = await axios.get('http://localhost:3001/api/asignacion-modulos');
-      setModulos(response.data);
-    } catch (error) {
-      console.error('Error al cargar los módulos:', error);
-    }
-  };
-
-  const cargarConteoPermisos = async () => {
-    try {
-      const response = await axios.get('http://localhost:3001/api/permisos-por-rol');
-      setConteoPermisos(response.data);
-    } catch (error) {
-      console.error('Error al cargar el conteo de permisos:', error);
-    }
-  };
-
-  const cargarPermisosPorRol = async (rolId) => {
-    try {
-      const response = await axios.get(`http://localhost:3001/api/permisos-por-rol/${rolId}`);
-      const permisosAsignados = response.data;
-
-      const nuevosEstados = {};
-      permisosAsignados.forEach(permiso => {
-        const key = `${permiso.MODULO_ID}-${permiso.SUBMODULO_ID}`;
-        nuevosEstados[key] = true;
-      });
-
-      setCheckboxStates(nuevosEstados);
-    } catch (error) {
-      console.error('Error al cargar permisos del rol:', error);
-      toast.error('Error al cargar permisos del rol.');
-    }
-  };
-
-  useEffect(() => {
-    cargarRoles();
-    cargarModulosYSubmodulos();
-    cargarConteoPermisos();
-  }, []);
-
-  useEffect(() => {
-    if (selectedRole) {
-      cargarPermisosPorRol(selectedRole);
-    }
-  }, [selectedRole]);
-
-  const getConteoPorRol = (rolId) => {
-    const encontrado = conteoPermisos.find(item => item.rol_id === rolId);
-    return encontrado ? encontrado.total : 0;
-  };
-
-  const filteredRoles = roles.filter((rol) =>
-    rol.NOMBRE.toLowerCase().includes(searchTerm.toLowerCase())
+/* ====== Input con botón de mostrar/ocultar (memoizado) ====== */
+const InputConOjo = memo(function InputConOjo({
+  label,
+  value,
+  onChange,
+  shown,
+  onToggle,
+  autoComplete,
+  autoFocus = false,
+}) {
+  return (
+    <div className="mb-4">
+      <label className="form-label text-white-90">{label}</label>
+      <div className="input-group">
+        <input
+          type={shown ? "text" : "password"}
+          className="form-control pro-input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          autoFocus={autoFocus}
+        />
+        <button
+          type="button"
+          className="input-group-text btn btn-outline-secondary pro-eye-btn"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggle}
+          aria-label={shown ? "Ocultar contraseña" : "Mostrar contraseña"}
+          tabIndex={-1}
+        >
+          {shown ? <FiEyeOff /> : <FiEye />}
+        </button>
+      </div>
+    </div>
   );
+});
 
-  const handleSelectAll = () => {
-    const updated = {};
-    modulos.forEach(modulo => {
-      modulo.SUBMODULOS?.forEach(sub => {
-        updated[`${modulo.ID}-${sub.ID}`] = true;
-      });
-    });
-    setCheckboxStates(updated);
+export default function ActualizarContrasena() {
+  const navigate = useNavigate();
+  const { login, user } = useContext(AuthContext);
+
+  // Campos
+  const [actual, setActual] = useState("");
+  const [nueva, setNueva] = useState("");
+  const [confirmar, setConfirmar] = useState("");
+
+  // Mostrar/ocultar
+  const [showActual, setShowActual] = useState(false);
+  const [showNueva, setShowNueva] = useState(false);
+  const [showConfirmar, setShowConfirmar] = useState(false);
+
+  // Alerta inicial
+  const [mostrarAlerta, setMostrarAlerta] = useState(true);
+  const [redirigiendo, setRedirigiendo] = useState(false);
+
+  // Guard local: si YA no es primer login, no renderizar esta vista
+  useEffect(() => {
+    const store = localStorage.getItem("userData") ? localStorage : sessionStorage;
+    const raw = store.getItem("userData");
+    const data = raw ? JSON.parse(raw) : null;
+    const flag =
+      data?.es_primer_login ?? data?.esPrimerLogin ?? user?.es_primer_login ?? user?.esPrimerLogin;
+
+    if (flag === false) {
+      setRedirigiendo(true);
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate, user]);
+
+  // Reglas de contraseña (ACTUALIZADAS: 10+ y símbolo genérico)
+  const validarNueva = (pwd) => {
+    const reglas = [
+      { ok: typeof pwd === "string" && pwd.length >= 10, msg: "La contraseña debe tener al menos 10 caracteres." },
+      { ok: /[A-Z]/.test(pwd), msg: "Debe incluir al menos una letra mayúscula." },
+      { ok: /[a-z]/.test(pwd), msg: "Debe incluir al menos una letra minúscula." },
+      { ok: /\d/.test(pwd), msg: "Debe incluir al menos un número." },
+      { ok: /[^A-Za-z0-9]/.test(pwd), msg: "Debe incluir al menos un carácter especial." },
+    ];
+    const errores = reglas.filter((r) => !r.ok).map((r) => r.msg);
+    return { esValida: errores.length === 0, errores };
   };
 
-  const handleDeselectAll = () => {
-    const updated = {};
-    modulos.forEach(modulo => {
-      modulo.SUBMODULOS?.forEach(sub => {
-        updated[`${modulo.ID}-${sub.ID}`] = false;
-      });
-    });
-    setCheckboxStates(updated);
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  const toggleCheckbox = (key) => {
-    setCheckboxStates(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
-
-  const handleGuardarPermisos = async () => {
-    if (!selectedRole) {
-      toast.warning('Seleccione un rol antes de guardar.');
+    if (!actual || !nueva || !confirmar) {
+      toast.warning("Completa todos los campos.");
       return;
     }
 
-    const permisosSeleccionados = Object.entries(checkboxStates)
-      .filter(([key, valor]) => valor)
-      .map(([key]) => {
-        const [modulo_id, submodulo_id] = key.split('-').map(Number);
-        return { modulo_id, submodulo_id };
-      });
+    const { esValida, errores } = validarNueva(nueva);
+    if (!esValida) {
+      errores.forEach((m) => toast.error(m));
+      return;
+    }
 
-    if (permisosSeleccionados.length === 0) {
-      toast.warning('Debe seleccionar al menos un submódulo.');
+    if (nueva === actual) {
+      toast.error("La nueva contraseña no puede ser igual a la actual.");
+      return;
+    }
+
+    if (nueva !== confirmar) {
+      toast.error("La confirmación no coincide con la nueva contraseña.");
       return;
     }
 
     try {
-      const response = await axios.post('http://localhost:3001/api/permisos', {
-        rolId: selectedRole,
-        permisos: permisosSeleccionados
+      const usuarioId =
+        Number(user?.id) ||
+        Number(localStorage.getItem("usuario_id")) ||
+        Number(sessionStorage.getItem("usuario_id"));
+
+      if (!usuarioId) {
+        toast.error("No se encontró la sesión del usuario. Inicia sesión nuevamente.");
+        return;
+      }
+
+      await axios.post(`${API_BASE}/login/primer-cambio`, {
+        usuarioId,
+        actualPassword: actual,
+        nuevaPassword: nueva,
       });
 
-      const message = response.data.message || '';
-
-      if (message.toLowerCase().includes('actualizados correctamente')) {
-        toast.success('Permisos guardados correctamente.');
+      const store = localStorage.getItem("userData") ? localStorage : sessionStorage;
+      const raw = store.getItem("userData");
+      if (raw) {
+        const data = JSON.parse(raw);
+        data.es_primer_login = false;
+        data.esPrimerLogin = false;
+        store.setItem("userData", JSON.stringify(data));
+        await login({ ...(user || {}), ...data });
       }
 
-      if (message.toLowerCase().includes('administrador')) {
-        toast.info('El rol administrador no puede perder submódulos.');
-      }
+      toast.success("Contraseña cambiada correctamente.");
+      setMostrarAlerta(false);
+      setActual("");
+      setNueva("");
+      setConfirmar("");
 
-      cargarConteoPermisos();
-
-    } catch (error) {
-      if (error.response && error.response.status === 403) {
-        const msg = error.response.data.message || 'Operación no permitida.';
-        if (msg.toLowerCase().includes('administrador')) {
-          toast.error('❌ No se pueden eliminar submódulos del rol administrador.');
-          await cargarPermisosPorRol(selectedRole); // 🔁 Restaurar los permisos actuales
-          return;
-        }
-      }
-
-      console.error('Error al guardar permisos:', error);
-      toast.error('Error al guardar permisos.');
+      setRedirigiendo(true);
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      const msg = err?.response?.data?.message || "No se pudo cambiar la contraseña.";
+      toast.error(msg);
+      const errs = err?.response?.data?.errores;
+      if (Array.isArray(errs)) errs.forEach((m) => toast.error(m));
     }
   };
+
+  if (redirigiendo) return null;
 
   return (
-    <div className="container-fluid mt-4">
-      <div className="row">
-        {/* Panel Izquierdo */}
-        <div className="col-md-4">
-          <div className="card shadow-sm">
-            <div className="card-header bg-primary text-white d-flex align-items-center">
-              <Users size={20} className="me-2" />
-              <strong>Roles del Sistema</strong>
+    <>
+      <div
+        className="pro-bg-fixed"
+        style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,.4), rgba(0,0,0,.55)), url('${BG_URL}')` }}
+      />
+      <div className="pro-screen">
+        <div className="pro-login-card">
+          <div className="pro-form">
+            <div className="pro-title">
+              <FiLock size={28} />
+              <h2 className="m-0">Cambiar Contraseña</h2>
             </div>
-            <div className="card-body">
-              <div className="d-flex justify-content-end mb-3">
-                <button className="btn btn-outline-primary btn-sm" onClick={() => setShowModal(true)}>
-                  <Plus size={16} className="me-1" /> Nuevo Rol
-                </button>
-              </div>
+            <p className="pro-sub">Primer inicio de sesión</p>
 
-              <input
-                type="text"
-                className="form-control mb-3"
-                placeholder="Buscar roles..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+            {mostrarAlerta && (
+              <div className="alert alert-info pro-info">
+                Por seguridad, debes cambiar tu contraseña temporal antes de continuar.
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              <InputConOjo
+                label="Contraseña Actual"
+                value={actual}
+                onChange={setActual}
+                shown={showActual}
+                onToggle={() => setShowActual((v) => !v)}
+                autoComplete="current-password"
+                autoFocus
+              />
+              <InputConOjo
+                label="Nueva Contraseña"
+                value={nueva}
+                onChange={setNueva}
+                shown={showNueva}
+                onToggle={() => setShowNueva((v) => !v)}
+                autoComplete="new-password"
+              />
+              <InputConOjo
+                label="Confirmar Nueva Contraseña"
+                value={confirmar}
+                onChange={setConfirmar}
+                shown={showConfirmar}
+                onToggle={() => setShowConfirmar((v) => !v)}
+                autoComplete="new-password"
               />
 
-              {filteredRoles.map((rol) => (
-                <div
-                  key={rol.ID}
-                  className={`card mb-2 shadow-sm ${selectedRole === rol.ID ? 'border-primary border-2' : ''}`}
-                  onClick={() => setSelectedRole(rol.ID)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="card-body p-2 d-flex justify-content-between align-items-center">
-                    <div>
-                      <h6 className="mb-0">{rol.NOMBRE}</h6>
-                      <small className="text-muted">Rol del sistema</small>
-                    </div>
-                    <span className="badge bg-info">{getConteoPorRol(rol.ID)} módulos</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Panel Derecho */}
-        <div className="col-md-8">
-          <div className="card shadow-sm">
-            <div className="card-header bg-secondary text-white d-flex align-items-center">
-              <Settings size={20} className="me-2" />
-              <strong>Asignación de Módulos</strong>
-            </div>
-
-            <div className="card-body">
-              {selectedRole ? (
-                <>
-                  <div className="mb-3">
-                    <button className="btn btn-success btn-sm me-2" onClick={handleSelectAll}>
-                      <Check size={16} className="me-1" />
-                      Seleccionar Todo
-                    </button>
-                    <button className="btn btn-danger btn-sm me-2" onClick={handleDeselectAll}>
-                      <X size={16} className="me-1" />
-                      Deseleccionar Todo
-                    </button>
-                    <button className="btn btn-primary btn-sm" onClick={handleGuardarPermisos}>
-                      <Save size={16} className="me-1" />
-                      Guardar Permisos
-                    </button>
-                  </div>
-
-                  {modulos.length > 0 ? (
-                    modulos.map(modulo => (
-                      <div key={modulo.ID} className="mb-3">
-                        <div className="bg-light p-2 rounded border mb-1">
-                          <strong>{formatearNombre(modulo.NOMBRE)}</strong>
-                        </div>
-                        <div className="ms-3">
-                          {modulo.SUBMODULOS?.map(sub => {
-                            const key = `${modulo.ID}-${sub.ID}`;
-                            return (
-                              <div key={sub.ID} className="form-check">
-                                <input
-                                  className="form-check-input"
-                                  type="checkbox"
-                                  id={key}
-                                  checked={checkboxStates[key] || false}
-                                  onChange={() => toggleCheckbox(key)}
-                                />
-                                <label className="form-check-label" htmlFor={key}>
-                                  {formatearNombre(sub.NOMBRE)}
-                                </label>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-muted">No hay módulos disponibles.</p>
-                  )}
-                </>
-              ) : (
-                <div className="text-center text-muted py-5">
-                  <Eye size={40} className="mb-3 text-secondary" />
-                  <p>Selecciona un rol para asignar sus permisos.</p>
-                </div>
-              )}
-            </div>
+              <button type="submit" className="pro-btn">
+                Cambiar Contraseña
+              </button>
+            </form>
           </div>
         </div>
       </div>
 
-      {showModal && (
-        <ModalNuevoRol
-          onClose={() => setShowModal(false)}
-          onRolGuardado={() => {
-            cargarRoles();
-            cargarConteoPermisos();
-          }}
-        />
-      )}
-    </div>
+      <ToastContainer position="top-right" autoClose={3500} newestOnTop />
+    </>
   );
-};
-
-export default AsignarModulos;
+}
