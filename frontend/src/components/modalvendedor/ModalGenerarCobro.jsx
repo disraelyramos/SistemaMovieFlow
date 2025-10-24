@@ -104,7 +104,7 @@ const ModalGenerarCobro = ({ visible, onClose, pedido, onGenerarTicket }) => {
           console.log("[Modal] GET /api/cajas/estado …");
           const { data } = await axios.get(`${API_BASE}/api/cajas/estado`, {
             params: { usuario_id },
-            timeout: 15000,
+            timeout: 45000, // ⬅️ Aumentado (antes 15000)
           });
           console.log("[Modal] respuesta /api/cajas/estado =", data);
 
@@ -155,7 +155,7 @@ const ModalGenerarCobro = ({ visible, onClose, pedido, onGenerarTicket }) => {
             body,
             {
               headers: { "Content-Type": "application/json" },
-              timeout: 20000,
+              timeout: 45000, // ⬅️ Aumentado (antes 20000)
               validateStatus: () => true,
             }
           );
@@ -206,10 +206,14 @@ const ModalGenerarCobro = ({ visible, onClose, pedido, onGenerarTicket }) => {
           console.log("[Modal] cerrando modal…");
           onClose();
         } catch (error) {
-          const msg =
-            error?.response?.data?.message ||
-            error?.message ||
-            "Error procesando la venta";
+          const isTimeout =
+            error?.code === "ECONNABORTED" ||
+            /timeout.*exceeded/i.test(error?.message || "");
+          const msg = isTimeout
+            ? "La operación tardó demasiado y fue cancelada. Intente de nuevo."
+            : error?.response?.data?.message ||
+              error?.message ||
+              "Error procesando la venta";
           console.error("[Modal] catch procesando venta:", error);
           toast.error(msg);
         } finally {
