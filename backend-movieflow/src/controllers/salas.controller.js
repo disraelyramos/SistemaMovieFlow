@@ -47,16 +47,49 @@ exports.crearSala = async (req, res) => {
     if (dup.rows[0].T > 0)
       return res.status(409).json({ message: 'Ya existe una sala con ese nombre' });
 
-    const r = await cn.execute(
-      `INSERT INTO SALAS (NOMBRE, CAPACIDAD, ESTADO)
-       VALUES (:n, :c, 'ACTIVA')
-       RETURNING ID_SALA INTO :outId`,
-      { n: nombre, c: Number(capacidad), outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } },
-      { autoCommit: true }
-    );
-    res.status(201).json({ id: r.outBinds.outId[0], nombre, capacidad: Number(capacidad), estado: 'ACTIVA' });
+    // Intento 1: confiar en identity/trigger de la BD (tu lógica original)
+    try {
+      const r1 = await cn.execute(
+        `INSERT INTO SALAS (NOMBRE, CAPACIDAD, ESTADO)
+         VALUES (:n, :c, 'ACTIVA')
+         RETURNING ID_SALA INTO :outId`,
+        { n: nombre, c: Number(capacidad), outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } },
+        { autoCommit: true }
+      );
+      return res.status(201).json({
+        id: r1.outBinds.outId[0],
+        nombre,
+        capacidad: Number(capacidad),
+        estado: 'ACTIVA'
+      });
+    } catch (e1) {
+      // Si la BD no genera ID (ORA-01400), reintentar con la secuencia
+      const isNullId =
+        e1?.errorNum === 1400 ||
+        (typeof e1?.message === 'string' && e1.message.includes('ORA-01400'));
+      if (!isNullId) throw e1;
+
+      // Intento 2: usar secuencia (requiere SEQ_SALAS existente)
+      const r2 = await cn.execute(
+        `INSERT INTO SALAS (ID_SALA, NOMBRE, CAPACIDAD, ESTADO)
+         VALUES (SEQ_SALAS.NEXTVAL, :n, :c, 'ACTIVA')
+         RETURNING ID_SALA INTO :outId`,
+        { n: nombre, c: Number(capacidad), outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } },
+        { autoCommit: true }
+      );
+      return res.status(201).json({
+        id: r2.outBinds.outId[0],
+        nombre,
+        capacidad: Number(capacidad),
+        estado: 'ACTIVA'
+      });
+    }
   } catch (e) {
     console.error('crearSala', e);
+    // Si la secuencia no existe (ORA-02289), avisar claramente
+    if (e?.errorNum === 2289) {
+      return res.status(500).json({ message: 'Falta la secuencia SEQ_SALAS en la BD.' });
+    }
     res.status(500).json({ message: 'Error al crear sala' });
   } finally { try { if (cn) await cn.close(); } catch {} }
 };
@@ -373,8 +406,3 @@ exports.reemplazarMapaAsientos = async (req, res) => {
     return res.status(500).json({ message: 'Error al guardar el mapa' });
   } finally { try { if (cn) await cn.close(); } catch {} }
 };
-
-
-
-
-
