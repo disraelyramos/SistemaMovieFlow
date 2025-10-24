@@ -7,7 +7,10 @@ import AgregarPelicula from '../components/AgregarPelicula';
 import EditarPelicula from '../components/EditarPelicula';
 import '../styles/peliculas.css';
 
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE =
+  import.meta.env?.VITE_API_BASE ||
+  import.meta.env?.VITE_API_BASE_URL ||
+  'http://localhost:3001';
 
 // Convierte "/uploads/xxx.jpg" -> "http://localhost:3001/uploads/xxx.jpg"
 const absUrl = (u) => {
@@ -17,6 +20,18 @@ const absUrl = (u) => {
   if (clean.startsWith('/')) return `${API_BASE}${clean}`;
   return `${API_BASE}/${clean.replace(/^\//, '')}`;
 };
+
+// Normaliza campos que pueden venir con distintos nombres desde el backend
+const normalizePelicula = (r = {}) => ({
+  ...r,
+  imagenUrl:
+    r.imagenUrl ??
+    r.IMAGEN_URL ??
+    r.imagen_url ??
+    r.posterUrl ??
+    r.posterLocal ??
+    '',
+});
 
 const Peliculas = () => {
   const [showModal, setShowModal] = useState(false);
@@ -67,7 +82,8 @@ const Peliculas = () => {
         if (categoriaId) params.set('categoriaId', categoriaId);
         const url = `${API_BASE}/api/peliculas${params.toString() ? `?${params}` : ''}`;
         const { data } = await axios.get(url, { signal: controller.signal });
-        setPeliculas(Array.isArray(data) ? data : []);
+        const lista = (Array.isArray(data) ? data : []).map(normalizePelicula);
+        setPeliculas(lista);
       } catch (err) {
         if (axios.isCancel?.(err)) return;
         console.error(err);
@@ -148,7 +164,7 @@ const Peliculas = () => {
   const abrirEdicion = async (p) => {
     try {
       const { data } = await axios.get(`${API_BASE}/api/peliculas/${p.id}`);
-      setEditData(data);
+      setEditData(normalizePelicula(data));
       setEditOpen(true);
     } catch (e) {
       console.error(e);
