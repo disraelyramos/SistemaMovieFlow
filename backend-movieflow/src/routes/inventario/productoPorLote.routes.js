@@ -9,5 +9,6 @@ router.get('/', sanitize, ctrl.listarPorProducto);
 
 // PUT /api/producto-por-lote/:idPorLote
 router.put('/:idPorLote', sanitize, ctrl.actualizarPorLote);
+router.post('/', sanitize, ctrl.crearPorLote);  
 
 module.exports = router;
