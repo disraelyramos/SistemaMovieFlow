@@ -9,8 +9,7 @@ import { FiEye, FiEyeOff } from 'react-icons/fi';
 const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||
-  import.meta?.env?.VITE_API_URL ||
-  'http://localhost:3001';
+  import.meta?.env?.VITE_API_URL;
 
 const NuevoUsuarioModal = ({
   show,

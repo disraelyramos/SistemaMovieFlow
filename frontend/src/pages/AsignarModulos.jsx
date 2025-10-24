@@ -7,6 +7,12 @@ import { toast } from 'react-toastify';
 import '../styles/asignar-modulos.css';
 import ModalNuevoRol from '../components/Asignacion-Modulos';
 
+const API_BASE =
+  import.meta?.env?.VITE_API_BASE ||
+  import.meta?.env?.VITE_API_BASE_URL ||
+  import.meta?.env?.VITE_API_URL ||
+  'http://localhost:3001';
+
 const AsignarModulos = () => {
   const [selectedRole, setSelectedRole] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,7 +28,7 @@ const AsignarModulos = () => {
 
   const cargarRoles = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/roles');
+      const response = await axios.get(`${API_BASE}/api/roles`);
       setRoles(response.data);
     } catch (error) {
       console.error('Error al cargar los roles:', error);
@@ -31,7 +37,7 @@ const AsignarModulos = () => {
 
   const cargarModulosYSubmodulos = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/asignacion-modulos');
+      const response = await axios.get(`${API_BASE}/api/asignacion-modulos`);
       setModulos(response.data);
     } catch (error) {
       console.error('Error al cargar los módulos:', error);
@@ -40,7 +46,7 @@ const AsignarModulos = () => {
 
   const cargarConteoPermisos = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/permisos-por-rol');
+      const response = await axios.get(`${API_BASE}/api/permisos-por-rol`);
       setConteoPermisos(response.data);
     } catch (error) {
       console.error('Error al cargar el conteo de permisos:', error);
@@ -49,7 +55,7 @@ const AsignarModulos = () => {
 
   const cargarPermisosPorRol = async (rolId) => {
     try {
-      const response = await axios.get(`http://localhost:3001/api/permisos-por-rol/${rolId}`);
+      const response = await axios.get(`${API_BASE}/api/permisos-por-rol/${rolId}`);
       const permisosAsignados = response.data;
 
       const nuevosEstados = {};
@@ -132,7 +138,7 @@ const AsignarModulos = () => {
     }
 
     try {
-      const response = await axios.post('http://localhost:3001/api/permisos', {
+      const response = await axios.post(`${API_BASE}/api/permisos`, {
         rolId: selectedRole,
         permisos: permisosSeleccionados
       });
@@ -154,7 +160,7 @@ const AsignarModulos = () => {
         const msg = error.response.data.message || 'Operación no permitida.';
         if (msg.toLowerCase().includes('administrador')) {
           toast.error('❌ No se pueden eliminar submódulos del rol administrador.');
-          await cargarPermisosPorRol(selectedRole); // 🔁 Restaurar los permisos actuales
+          await cargarPermisosPorRol(selectedRole);
           return;
         }
       }
