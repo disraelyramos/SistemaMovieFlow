@@ -12,13 +12,28 @@ const API_HOST =
   "http://localhost:3001";
 const API_BASE = `${API_HOST.replace(/\/+$/, "")}/api`;
 
-// DD/MM/YYYY -> YYYY-MM-DD
+// DD/MM/YYYY -> YYYY-MM-DD (y limpia valores ISO con 'T')
 const toISO = (ddmmyyyy) => {
   if (!ddmmyyyy) return "";
-  if (ddmmyyyy.includes("-")) return ddmmyyyy;
-  const [d, m, y] = ddmmyyyy.split("/");
+  // si viene como '2028-10-10T00:00:00.000Z' o '2028-10-10 00:00:00'
+  if (ddmmyyyy.includes("T") || ddmmyyyy.includes(" ")) return String(ddmmyyyy).slice(0, 10);
+  // si ya viene YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ddmmyyyy)) return ddmmyyyy;
+  // si viene DD/MM/YYYY
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length !== 3) return "";
+  const [d, m, y] = parts;
   if (!d || !m || !y) return "";
-  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+};
+
+// normaliza cualquier valor de fecha a 'YYYY-MM-DD'
+const normalizeYMD = (v) => {
+  if (!v) return "";
+  const s = String(v);
+  if (s.includes("T") || s.includes(" ")) return s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return toISO(s);
 };
 
 const EditarProductoModal = ({
@@ -75,8 +90,10 @@ const EditarProductoModal = ({
       try {
         const pid = encodeURIComponent(producto.id);
         const candidates = [
+          // 👇 primero las rutas en singular (coinciden con tu backend pegado)
           `${API_BASE}/producto-por-lote?productoId=${pid}`,
           `${API_BASE}/inventario/producto-por-lote?productoId=${pid}`,
+          // 👇 dejamos la plural como último intento (solo si existiera en otro despliegue)
           `${API_BASE}/productos-por-lote?productoId=${pid}`,
         ];
 
@@ -111,7 +128,8 @@ const EditarProductoModal = ({
           setLoteForm({
             idPorLote: first.id ?? first.ID ?? "",
             numeroLoteId: first.loteId ?? first.LOTE_ID ?? first.LOTE ?? "",
-            fechaVencimiento: toISO(first.fechaVencimiento ?? first.FECHA_VENCIMIENTO ?? ""),
+            // 👇 garantizamos 'YYYY-MM-DD' para el input date
+            fechaVencimiento: normalizeYMD(first.fechaVencimiento ?? first.FECHA_VENCIMIENTO ?? ""),
             cantidad: "",
           });
         }
@@ -163,7 +181,7 @@ const EditarProductoModal = ({
     }
     if (loteForm.fechaVencimiento) {
       const hoy = new Date(); hoy.setHours(0,0,0,0);
-      const fv = new Date(loteForm.fechaVencimiento); fv.setHours(0,0,0,0);
+      const fv = new Date(normalizeYMD(loteForm.fechaVencimiento)); fv.setHours(0,0,0,0);
       if (Number.isNaN(fv.getTime())) return toast.error("Fecha inválida");
       if (fv < hoy) return toast.error("La fecha no puede ser anterior a hoy");
     }
@@ -194,15 +212,16 @@ const EditarProductoModal = ({
         payloadPPL.cantidad = Number(loteForm.cantidad);
       }
       if (loteForm.fechaVencimiento !== undefined) {
-        payloadPPL.fechaVencimiento = loteForm.fechaVencimiento || "";
+        // 👇 aseguramos formato 'YYYY-MM-DD' sin 'T...Z'
+        payloadPPL.fechaVencimiento = normalizeYMD(loteForm.fechaVencimiento) || "";
       }
 
       if (Object.keys(payloadPPL).length > 0) {
-        // intentamos variantes de ruta
+        // intentamos variantes de ruta (singular primero)
         const endpoints = [
           `${API_BASE}/producto-por-lote/${loteForm.idPorLote}`,
           `${API_BASE}/inventario/producto-por-lote/${loteForm.idPorLote}`,
-          `${API_BASE}/productos-por-lote/${loteForm.idPorLote}`,
+          `${API_BASE}/productos-por-lote/${loteForm.idPorLote}`, // último fallback
         ];
         let updated = false;
         let lastErr = null;
@@ -344,7 +363,11 @@ const EditarProductoModal = ({
                     modo="editar"
                     values={loteForm}
                     onChange={({ field, value }) =>
-                      setLoteForm((prev) => ({ ...prev, [field]: value }))
+                      setLoteForm((prev) => ({
+                        ...prev,
+                        // 👇 si el campo es fecha, normalizamos a 'YYYY-MM-DD'
+                        [field]: field === "fechaVencimiento" ? normalizeYMD(value) : value,
+                      }))
                     }
                     onAtras={() => setPaso(1)}
                     onGuardar={handleGuardarTodo}
