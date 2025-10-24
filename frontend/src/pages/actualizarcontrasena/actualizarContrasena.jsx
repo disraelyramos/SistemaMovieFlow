@@ -9,6 +9,12 @@ import "../../styles/actualizar-contrasena.css"; // ⬅️ CSS externo
 
 const BG_URL = "/img/bg-cinema.jpg";
 
+/* ====== BASE API (prod: Netlify env | dev: localhost) ====== */
+const API_BASE =
+  import.meta.env?.VITE_API_BASE ||
+  import.meta.env?.VITE_API_BASE_URL ||
+  (import.meta.env?.MODE === "development" ? "http://localhost:3001" : "");
+
 /* ====== Input con botón de mostrar/ocultar (memoizado) ====== */
 const InputConOjo = memo(function InputConOjo({
   label,
@@ -126,7 +132,7 @@ export default function ActualizarContrasena() {
         return;
       }
 
-      await axios.post("http://localhost:3001/login/primer-cambio", {
+      await axios.post(`${API_BASE}/login/primer-cambio`, {
         usuarioId,
         actualPassword: actual,
         nuevaPassword: nueva,
