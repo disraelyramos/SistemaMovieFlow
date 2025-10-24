@@ -3,7 +3,12 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { getConnection } = require('./src/config/db');
+const path = require('path');
+const fs = require('fs');
 
+
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app = express();
 
@@ -370,10 +375,18 @@ app.get('/api/compras', async (req, res) => {
   }
 });
 
-/* ==================== Archivos estáticos ==================== */
-const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+/* ==================== Archivos estáticos ==================== */
+// Servir /uploads desde el directorio configurado
+app.use('/uploads', express.static(UPLOADS_DIR, { fallthrough: false }));
+
+// 404 claro si el archivo no existe
+app.use('/uploads', (req, res) => {
+  res.status(404).json({
+    error: 'Archivo no encontrado',
+    path: path.join(UPLOADS_DIR, req.path)
+  });
+});
 
 // --- RUTAS DE DIAGNÓSTICO ---
 // IP pública de salida del servidor (para agregarla a la ACL de OCI)
