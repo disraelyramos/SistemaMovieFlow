@@ -65,7 +65,7 @@ exports.crearSolicitud = async (req, res) => {
     const end   = addMinutes(start, Number(duracionMin));
 
     const r = await cn.execute(
-      `INSERT INTO ESTUDIANTE.SOLICITUDES_EVENTO
+      `INSERT INTO SOLICITUDES_EVENTO
          (SALA_ID, START_TS, END_TS, DURACION_MIN, PERSONAS, NOMBRE, CELULAR, NOTAS, ESTADO, CLIENTE_ID, UEMAIL)
        VALUES
          (:p_sala, :p_start, :p_end, :p_dur, :p_pers, :p_nom, :p_cel, :p_notas, 'PENDIENTE', :p_cid, :p_uemail)
@@ -108,7 +108,7 @@ exports.listarSolicitudes = async (req, res) => {
       SELECT s.ID_SOLICITUD, s.SALA_ID, s.START_TS, s.END_TS, s.DURACION_MIN, s.PERSONAS,
              s.NOMBRE, s.CELULAR, s.NOTAS, s.ESTADO, s.MOTIVO_RECHAZO,
              s.CLIENTE_ID, s.UEMAIL, s.EVENTO_ID, s.CREATED_AT
-        FROM ESTUDIANTE.SOLICITUDES_EVENTO s
+        FROM SOLICITUDES_EVENTO s
       ${where}
     ORDER BY s.ESTADO, s.CREATED_AT DESC`;
     const r = await cn.execute(q, binds);
@@ -139,7 +139,7 @@ exports.misSolicitudes = async (req, res) => {
     const q = `
       SELECT s.ID_SOLICITUD, s.SALA_ID, s.START_TS, s.END_TS, s.DURACION_MIN, s.PERSONAS,
              s.NOMBRE, s.CELULAR, s.NOTAS, s.ESTADO, s.MOTIVO_RECHAZO, s.EVENTO_ID, s.CREATED_AT
-        FROM ESTUDIANTE.SOLICITUDES_EVENTO s
+        FROM SOLICITUDES_EVENTO s
        WHERE ${conds.join(' AND ')}
     ORDER BY s.CREATED_AT DESC`;
     const r = await cn.execute(q, binds);
@@ -159,7 +159,7 @@ exports.aprobarSolicitud = async (req, res) => {
     const { id } = req.params;
 
     const r1 = await cn.execute(
-      `SELECT * FROM ESTUDIANTE.SOLICITUDES_EVENTO WHERE ID_SOLICITUD = :p_id FOR UPDATE`,
+      `SELECT * FROM SOLICITUDES_EVENTO WHERE ID_SOLICITUD = :p_id FOR UPDATE`,
       { p_id: Number(id) }
     );
     if (!r1.rows.length) return res.status(404).json({ ok:false, error:'NO_ENCONTRADA' });
@@ -170,7 +170,7 @@ exports.aprobarSolicitud = async (req, res) => {
     }
 
     const r2 = await cn.execute(
-      `INSERT INTO ESTUDIANTE.EVENTOS_ESPECIALES
+      `INSERT INTO EVENTOS_ESPECIALES
          (SALA_ID, START_TS, END_TS, DURACION_MIN, PERSONAS, NOTAS, ESTADO, CLIENTE_ID, CREATED_AT)
        VALUES
          (:p_sala, :p_start, :p_end, :p_dur, :p_pers, :p_notas, 'RESERVADO', :p_cid, SYSTIMESTAMP)
@@ -189,7 +189,7 @@ exports.aprobarSolicitud = async (req, res) => {
     const idEvento = r2.outBinds.out_evt[0];
 
     await cn.execute(
-      `UPDATE ESTUDIANTE.SOLICITUDES_EVENTO
+      `UPDATE SOLICITUDES_EVENTO
           SET ESTADO='ACEPTADA', EVENTO_ID=:p_evt
         WHERE ID_SOLICITUD = :p_id`,
       { p_evt: idEvento, p_id: Number(id) }
@@ -214,7 +214,7 @@ exports.rechazarSolicitud = async (req, res) => {
     const { motivo } = req.body;
 
     const r1 = await cn.execute(
-      `SELECT ESTADO FROM ESTUDIANTE.SOLICITUDES_EVENTO WHERE ID_SOLICITUD = :p_id FOR UPDATE`,
+      `SELECT ESTADO FROM SOLICITUDES_EVENTO WHERE ID_SOLICITUD = :p_id FOR UPDATE`,
       { p_id: Number(id) }
     );
     if (!r1.rows.length) return res.status(404).json({ ok:false, error:'NO_ENCONTRADA' });
@@ -223,7 +223,7 @@ exports.rechazarSolicitud = async (req, res) => {
     }
 
     await cn.execute(
-      `UPDATE ESTUDIANTE.SOLICITUDES_EVENTO
+      `UPDATE SOLICITUDES_EVENTO
           SET ESTADO='RECHAZADA', MOTIVO_RECHAZO=:p_motivo
         WHERE ID_SOLICITUD = :p_id`,
       { p_motivo: motivo || 'Sin especificar', p_id: Number(id) }
