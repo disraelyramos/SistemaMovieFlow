@@ -65,7 +65,7 @@ const parseHoraMin = (v) => {
 async function _fetchFuncionesDiaSala(conn, salaId, dayStart) {
   const base = (colSala) => `
     SELECT FECHA, HORA_INICIO, HORA_FINAL, NVL(ESTADO,'VIGENTE') AS ESTADO
-      FROM FUNCIONES F
+      FROM ESTUDIANTE.FUNCIONES F
      WHERE F.${colSala} = :sid
        AND TRUNC(F.FECHA) = TRUNC(:dayStart)
   `;
@@ -82,7 +82,7 @@ async function _fetchFuncionesDiaSala(conn, salaId, dayStart) {
 async function _fetchEventosDiaSala(conn, salaId, dayStart) {
   const base = (colSala) => `
     SELECT START_TS, END_TS, NVL(ESTADO,'RESERVADO') AS ESTADO
-      FROM EVENTOS_ESPECIALES E
+      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
      WHERE E.${colSala} = :sid
        AND UPPER(TRIM(NVL(E.ESTADO,'RESERVADO'))) <> 'CANCELADO'
        AND TRUNC(E.START_TS) = TRUNC(:dayStart)
@@ -100,7 +100,7 @@ async function _fetchEventosDiaSala(conn, salaId, dayStart) {
 async function _fetchEventosSolape(conn, salaId, startTs, endTs) {
   const base = (colSala) => `
     SELECT START_TS, END_TS, NVL(ESTADO,'RESERVADO') AS ESTADO
-      FROM EVENTOS_ESPECIALES E
+      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
      WHERE E.${colSala} = :sid
        AND UPPER(TRIM(NVL(E.ESTADO,'RESERVADO'))) <> 'CANCELADO'
        AND NOT (E.END_TS <= :startTs OR E.START_TS >= :endTs)
@@ -201,7 +201,7 @@ async function crearEventoReservado(req, res) {
 
     // Insert con RETURNING (captura ID aunque lo asigne un trigger)
     const result = await conn.execute(
-      `INSERT INTO EVENTOS_ESPECIALES
+      `INSERT INTO ESTUDIANTE.EVENTOS_ESPECIALES
          (SALA_ID, START_TS, END_TS, DURACION_MIN, PERSONAS, NOTAS, ESTADO, CLIENTE_ID)
        VALUES
          (:salaId, :startTs, :endTs, :duracionMin, :personas, :notas, 'RESERVADO', :clienteId)
@@ -268,8 +268,8 @@ async function listarEventosReservados(req, res) {
            E.CLIENTE_ID                                       AS CLIENTE_ID,
            E.CLIENTE_ID                                       AS "clienteId",
            E.CREATED_AT                                       AS CREATED_AT
-      FROM EVENTOS_ESPECIALES E
- LEFT JOIN SALAS S
+      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
+ LEFT JOIN ESTUDIANTE.SALAS S
         ON S.${salaIdCol} = E.SALA_ID
      ${where}
      ${order}`;
@@ -279,7 +279,7 @@ async function listarEventosReservados(req, res) {
 
     // Auto-finalizar vencidos
     await conn.execute(
-      `UPDATE EVENTOS_ESPECIALES E
+      `UPDATE ESTUDIANTE.EVENTOS_ESPECIALES E
           SET E.ESTADO = 'FINALIZADO'
         WHERE E.END_TS <= SYSTIMESTAMP
           AND UPPER(TRIM(NVL(E.ESTADO,'RESERVADO'))) = 'RESERVADO'`,
@@ -344,17 +344,31 @@ async function listarMisEventos(req, res) {
     const emailRaw  = String(req.query.email || '').trim();
     const email     = emailRaw || null;
 
-    if (!clienteId && !email) return res.status(400).json({ message: 'Falta clienteId o email.' });
+    if (!clienteId && !email) {
+      return res.status(400).json({ message: 'Falta clienteId o email.' });
+    }
 
+    // Helper local para el botón "Cancelar"
+    const canCancelFrom = (iso, estado) => {
+      const start = iso ? new Date(iso) : null;
+      if (!start || isNaN(start)) return false;
+      const now = new Date();
+      const diffMs = start.getTime() - now.getTime();
+      const H24 = 24 * 60 * 60 * 1000;
+      const estadoOk = !['CANCELADO','FINALIZADO'].includes(String(estado || '').toUpperCase());
+      return diffMs >= H24 && estadoOk;
+    };
+
+    // ¿Existe la tabla de pagos? (para flag pagado)
     const hasPagoTbl = (await tableExists(conn, 'POS_PAGO_EVENTO'));
     const pagoExistsSQL = hasPagoTbl
       ? `CASE WHEN EXISTS (
              SELECT 1
-               FROM ${'POS_PAGO_EVENTO'} p
+               FROM ESTUDIANTE.POS_PAGO_EVENTO p
               WHERE p.EVENTO_ID = E.ID_EVENTO
                 AND NVL(UPPER(p.ESTADO),'X') IN ('PAGADO','CONFIRMADO')
-           ) THEN 1 ELSE 0 END AS PAGADO`
-      : `0 AS PAGADO`;
+           ) THEN 1 ELSE 0 END AS "pagadoFlag"`
+      : `0 AS "pagadoFlag"`;
 
     const binds = {};
     const conds = [];
@@ -362,38 +376,101 @@ async function listarMisEventos(req, res) {
     if (email)     { conds.push('INSTR(UPPER(NVL(E.NOTAS,\'\')), :tag) > 0'); binds.tag = `[UEMAIL:${email.toUpperCase()}]`; }
     const where = `WHERE ${conds.join(' OR ')}`;
 
+    // SELECT base con fallback (SALAS.ID o SALAS.ID_SALA)
     const base = (salaIdCol = 'ID') => `
-      SELECT E.ID_EVENTO                                   AS "idEvento",
-             E.SALA_ID                                     AS "salaId",
-             S.NOMBRE                                      AS "salaNombre",
-             E.START_TS, E.END_TS,
-             TO_CHAR(E.START_TS,'YYYY-MM-DD')              AS "fecha",
-             TO_CHAR(E.START_TS,'HH24:MI')                 AS "horaInicio",
-             TO_CHAR(E.END_TS,'HH24:MI')                   AS "horaFinal",
-             E.DURACION_MIN                                AS "duracionMin",
-             E.PERSONAS                                    AS "personas",
-             E.NOTAS                                       AS "notas",
-             NVL(E.ESTADO,'RESERVADO')                     AS "estado",
-             E.CLIENTE_ID                                  AS "clienteId",
-             ${pagoExistsSQL}
-        FROM EVENTOS_ESPECIALES E
-   LEFT JOIN SALAS S
-          ON S.${salaIdCol} = E.SALA_ID
-       ${where}
-    ORDER BY E.START_TS DESC`;
+      SELECT
+        E.ID_EVENTO                                     AS "idEvento",
+        E.SALA_ID                                       AS "salaId",
+        S.NOMBRE                                        AS "salaNombre",
 
+        /* ISO y crudos */
+        TO_CHAR(E.START_TS,'YYYY-MM-DD"T"HH24:MI:SS')   AS "inicioISO",
+        TO_CHAR(E.END_TS,'YYYY-MM-DD"T"HH24:MI:SS')     AS "finISO",
+        TO_CHAR(E.START_TS,'YYYY-MM-DD')                AS "fecha",
+        TO_CHAR(E.START_TS,'HH24:MI')                   AS "horaInicio",
+        TO_CHAR(E.END_TS,'HH24:MI')                     AS "horaFin",
+
+        /* Listo para UI (12h + dd/mm/yyyy) */
+        TO_CHAR(E.START_TS,'DD/MM/YYYY')                AS "fechaTxt",
+        TO_CHAR(E.START_TS,'HH12:MI AM')                AS "horaInicioTxt",
+        TO_CHAR(E.END_TS,'HH12:MI AM')                  AS "horaFinTxt",
+
+        /* Otros campos */
+        E.DURACION_MIN                                  AS "duracionMin",
+        E.PERSONAS                                      AS "personas",
+        E.NOTAS                                         AS "notas",
+        NVL(E.ESTADO,'RESERVADO')                       AS "estado",
+        E.CLIENTE_ID                                    AS "clienteId",
+        ${pagoExistsSQL}
+      FROM ESTUDIANTE.EVENTOS_ESPECIALES E
+      LEFT JOIN ESTUDIANTE.SALAS S
+             ON S.${salaIdCol} = E.SALA_ID
+      ${where}
+      ORDER BY E.START_TS DESC`;
+
+    let rows;
     try {
-      const r = await conn.execute(base('ID'), binds);
-      const rows = (r.rows || []).map(x => ({ ...x, PAGADO: x.PAGADO === 1 }));
-      return res.json(rows);
+      rows = (await conn.execute(base('ID'), binds)).rows || [];
     } catch (e1) {
-      if (String(e1.message).includes('ORA-00904')) {
-        const r2 = await conn.execute(base('ID_SALA'), binds);
-        const rows = (r2.rows || []).map(x => ({ ...x, PAGADO: x.PAGADO === 1 }));
-        return res.json(rows);
-      }
-      throw e1;
+      if (!String(e1.message).includes('ORA-00904')) throw e1;
+      rows = (await conn.execute(base('ID_SALA'), binds)).rows || [];
     }
+
+    // Normalizamos: camelCase + legacy + objeto sala
+    const data = rows.map(r => {
+      const salaId     = Number(r.salaId) || null;
+      const salaNombre = (r.salaNombre && String(r.salaNombre).trim())
+                          || (salaId ? `Sala ${salaId}` : 'Sala');
+      const inicioISO  = r.inicioISO || null;
+      const finISO     = r.finISO || null;
+      const pagadoBool = r.pagadoFlag === 1;
+
+      return {
+        // ==== camelCase (principal) ====
+        id: r.idEvento,
+        salaId,
+        salaNombre,
+        fecha: r.fecha || null,          // YYYY-MM-DD
+        horaInicio: r.horaInicio || null,
+        horaFin: r.horaFin || null,
+        inicioISO,
+        finISO,
+        fechaTxt: r.fechaTxt,            // dd/mm/yyyy
+        horaInicioTxt: r.horaInicioTxt,  // HH:MM AM/PM
+        horaFinTxt: r.horaFinTxt,
+        duracionMin: r.duracionMin ?? null,
+        personas: r.personas ?? null,
+        estado: r.estado,
+        notas: r.notas || '',
+        clienteId: r.clienteId ?? null,
+        pagado: pagadoBool,
+        puedeCancelar: canCancelFrom(inicioISO, r.estado),
+
+        // ==== legacy (compatibilidad total con JSX viejo) ====
+        ID_EVENTO: r.idEvento,
+        SALA_ID: salaId,
+        SALA_NOMBRE: salaNombre,
+        FECHA: r.fecha || null,
+        HORA_INICIO: r.horaInicio || null,
+        HORA_FIN: r.horaFin || null,
+        START_ISO: inicioISO,
+        END_ISO: finISO,
+        FECHA_TXT: r.fechaTxt,
+        HORA_INICIO_TXT: r.horaInicioTxt,
+        HORA_FIN_TXT: r.horaFinTxt,
+        DURACION_MIN: r.duracionMin ?? null,
+        PERSONAS: r.personas ?? null,
+        ESTADO: r.estado,
+        NOTAS: r.notas || '',
+        CLIENTE_ID: r.clienteId ?? null,
+        PAGADO: pagadoBool ? 1 : 0,
+
+        // ==== objeto anidado sala ====
+        sala: { id: salaId, nombre: salaNombre },
+      };
+    });
+
+    return res.json(data);
   } catch (e) {
     console.error('listarMisEventos error:', e);
     return res.status(500).json({ message: 'Error al listar mis reservas', detail: e.message ?? String(e) });
@@ -419,7 +496,7 @@ async function actualizarEventoReservado(req, res) {
   try {
     conn = await getConnection();
     await conn.execute(
-      `UPDATE EVENTOS_ESPECIALES
+      `UPDATE ESTUDIANTE.EVENTOS_ESPECIALES
           SET
             SALA_ID      = COALESCE(:salaId, SALA_ID),
             START_TS     = COALESCE(:startTs, START_TS),
@@ -461,7 +538,7 @@ async function getPagoTableName(conn) {
   const hasUser = (qUser.rows?.[0]?.N || qUser.rows?.[0]?.n || 0) > 0;
   const hasEst  = (qAll.rows?.[0]?.N  || qAll.rows?.[0]?.n  || 0) > 0;
   if (hasUser) return 'POS_PAGO_EVENTO';
-  if (hasEst)  return 'POS_PAGO_EVENTO';
+  if (hasEst)  return 'ESTUDIANTE.POS_PAGO_EVENTO';
   return null;
 }
 
@@ -475,7 +552,7 @@ async function cancelarEventoReservado(req, res) {
 
     const info = await conn.execute(
       `SELECT ID_EVENTO, START_TS, NVL(ESTADO,'RESERVADO') AS ESTADO
-         FROM EVENTOS_ESPECIALES
+         FROM ESTUDIANTE.EVENTOS_ESPECIALES
         WHERE ID_EVENTO = :id`,
       { id: Number(id) }
     );
@@ -504,11 +581,11 @@ async function cancelarEventoReservado(req, res) {
     }
 
     try {
-      await conn.execute(`BEGIN PR_EVT_CANCELAR(:id); END;`, { id: Number(id) }, { autoCommit: true });
+      await conn.execute(`BEGIN ESTUDIANTE.PR_EVT_CANCELAR(:id); END;`, { id: Number(id) }, { autoCommit: true });
       return res.json({ ok: true, via: 'SP' });
     } catch {
       await conn.execute(
-        `UPDATE EVENTOS_ESPECIALES
+        `UPDATE ESTUDIANTE.EVENTOS_ESPECIALES
             SET ESTADO = 'CANCELADO'
           WHERE ID_EVENTO = :id`,
         { id: Number(id) },
@@ -636,8 +713,8 @@ async function comprobantePdfEvento(req, res) {
                 E.START_TS, E.END_TS, E.DURACION_MIN,
                 E.PERSONAS, E.NOTAS, NVL(E.ESTADO,'RESERVADO') AS ESTADO,
                 S.NOMBRE AS SALA_NOMBRE
-           FROM EVENTOS_ESPECIALES E
-      LEFT JOIN SALAS S ON S.ID_SALA = E.SALA_ID
+           FROM ESTUDIANTE.EVENTOS_ESPECIALES E
+      LEFT JOIN ESTUDIANTE.SALAS S ON S.ID_SALA = E.SALA_ID
           WHERE E.ID_EVENTO = :id`,
         { id }
       );
@@ -650,8 +727,8 @@ async function comprobantePdfEvento(req, res) {
                 E.START_TS, E.END_TS, E.DURACION_MIN,
                 E.PERSONAS, E.NOTAS, NVL(E.ESTADO,'RESERVADO') AS ESTADO,
                 S.NOMBRE AS SALA_NOMBRE
-           FROM EVENTOS_ESPECIALES E
-      LEFT JOIN SALAS S ON S.ID = E.SALA_ID
+           FROM ESTUDIANTE.EVENTOS_ESPECIALES E
+      LEFT JOIN ESTUDIANTE.SALAS S ON S.ID = E.SALA_ID
           WHERE E.ID_EVENTO = :id`,
         { id }
       );

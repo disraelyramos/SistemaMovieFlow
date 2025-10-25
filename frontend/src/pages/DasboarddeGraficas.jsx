@@ -19,10 +19,7 @@ const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||
   import.meta?.env?.VITE_API_URL ||
-  // 🔒 Solo usar localhost en desarrollo real; en prod queda vacío para evitar “localhost” quemado
-  ((typeof window !== 'undefined' && window.location?.hostname === 'localhost')
-    ? 'http://localhost:3001'
-    : '');
+  'http://localhost:3001';
 
 /* ======================= Axios con token ======================= */
 const client = axios.create({ baseURL: API_BASE, withCredentials: false });

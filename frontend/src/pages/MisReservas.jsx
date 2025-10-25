@@ -7,7 +7,7 @@ const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||
   import.meta?.env?.VITE_API_URL ||
-  'http://localhost:3001';
+  '';
 
 /* ==================== Sesión ==================== */
 function getClienteId() {
@@ -96,18 +96,43 @@ function EstadoBadge({ estado = '—', puedeCancelar }) {
 
 /* ============ Normalizador API -> UI ============ */
 function mapRowToUI(r) {
-  const start = r.START_TS ? new Date(r.START_TS) : null;
+  // Tomar el inicio/fin desde cualquier variante que pueda traer el backend
+  const inicioISO =
+    r.inicioISO ||
+    r.START_ISO ||
+    r.START_TS ||
+    (r.FECHA && (r.HORA_INICIO || r.HORA_INICIO_TXT)
+      ? `${r.FECHA}T${(r.HORA_INICIO || r.HORA_INICIO_TXT).replace(' ', '')}:00`
+      : null);
+
+  const finISO =
+    r.finISO ||
+    r.END_ISO ||
+    r.END_TS ||
+    (r.FECHA && (r.HORA_FIN || r.HORA_FIN_TXT)
+      ? `${r.FECHA}T${(r.HORA_FIN || r.HORA_FIN_TXT).replace(' ', '')}:00`
+      : null);
+
+  // Sala (cubre distintos nombres)
+  const salaId = r.SALA_ID ?? r.salaId ?? null;
+  const salaNombre =
+    r.SALA_NOMBRE || r.salaNombre || (salaId ? `Sala ${salaId}` : 'Sala');
+
+  // Personas / notas / estado
+  const personas = r.PERSONAS ?? r.personas ?? null;
+  const notas = r.NOTAS ?? r.notas ?? '';
+  const estado = r.ESTADO ?? r.estado ?? 'RESERVADO';
 
   // Flag pagado: soporta true/false, 1/0 o minúsculas
   const pagado =
-    r.PAGADO === true ||
-    r.PAGADO === 1 ||
-    r.pagado === true ||
-    r.pagado === 1;
+    r.PAGADO === true || r.PAGADO === 1 ||
+    r.pagado === true || r.pagado === 1;
 
+  // Ventana 24h
   const now = new Date();
+  const start = inicioISO ? new Date(inicioISO) : null;
   let puedeCancelar =
-    String(r.ESTADO || '').toUpperCase() === 'RESERVADO' &&
+    String(estado).toUpperCase() === 'RESERVADO' &&
     start instanceof Date &&
     !isNaN(start) &&
     (start.getTime() - now.getTime()) >= 24 * 60 * 60 * 1000;
@@ -116,18 +141,19 @@ function mapRowToUI(r) {
   if (pagado) puedeCancelar = false;
 
   return {
-    id: r.ID_EVENTO,
-    salaId: r.SALA_ID,
-    salaNombre: r.SALA_NOMBRE,
-    inicioISO: r.START_TS,
-    finISO: r.END_TS,
-    personas: r.PERSONAS,
-    notas: r.NOTAS,
-    estado: r.ESTADO,
+    id: r.ID_EVENTO ?? r.id ?? r.idEvento,
+    salaId,
+    salaNombre,
+    inicioISO,
+    finISO,
+    personas,
+    notas,
+    estado,
     puedeCancelar,
-    pagado, // <- nuevo
+    pagado,
   };
 }
+
 
 /* ============ Filtro por fecha (cliente) ============ */
 const toDateOnly = (iso) => {
