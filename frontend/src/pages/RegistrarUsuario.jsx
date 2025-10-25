@@ -5,6 +5,12 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { FaEdit, FaChevronDown } from 'react-icons/fa';
 import NuevoUsuarioModal from '../components/NuevoUsuarioModal';
 
+const API_BASE =
+  import.meta?.env?.VITE_API_BASE ||
+  import.meta?.env?.VITE_API_BASE_URL ||
+  import.meta?.env?.VITE_API_URL ||
+  'http://localhost:3001';
+
 const RegistrarUsuario = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,7 +34,7 @@ const RegistrarUsuario = () => {
 
   const cargarUsuarios = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/usuarios');
+      const response = await axios.get(`${API_BASE}/api/usuarios`);
       setUsuarios(response.data);
     } catch (error) {
       console.error('Error al cargar usuarios:', error);
@@ -37,7 +43,7 @@ const RegistrarUsuario = () => {
 
   const cargarEstadosFiltro = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/estados');
+      const response = await axios.get(`${API_BASE}/api/estados`);
       const nombres = response.data.map(e => e.NOMBRE);
       setEstadosFiltro(['Todos', ...nombres]);
     } catch (error) {
