@@ -4,6 +4,12 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { validarNombre } from '../utils/validations';
 
+const API_BASE =
+  import.meta?.env?.VITE_API_BASE ||
+  import.meta?.env?.VITE_API_BASE_URL ||
+  import.meta?.env?.VITE_API_URL ||
+  '';
+
 const ModalNuevoRol = ({ onClose, onRolGuardado }) => {
   const [nombre, setNombre] = useState('');
   const [error, setError] = useState('');
@@ -16,7 +22,7 @@ const ModalNuevoRol = ({ onClose, onRolGuardado }) => {
     }
 
     try {
-      await axios.post('http://localhost:3001/api/roles', {
+      await axios.post(`${API_BASE}/api/roles`, {
         nombre: nombre.trim()
       });
 
