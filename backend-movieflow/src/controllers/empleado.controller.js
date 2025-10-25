@@ -15,7 +15,7 @@ async function getTaquillaOpenInfo(cn) {
       FROM POS_APERTURA_CAJA a
       JOIN POS_CAJAS c ON c.ID_CAJA = a.CAJA_ID
      WHERE UPPER(TRIM(c.NOMBRE_CAJA)) = 'CAJA TAQUILLA'
-       AND a.ESTADO_ID = 1
+       AND a.ESTADO_ID = 26
      ORDER BY a.FECHA_APERTURA DESC, a.HORA_APERTURA DESC
      FETCH FIRST 1 ROWS ONLY
     `,
@@ -44,7 +44,7 @@ async function insertVentaTaquilla(cn, { usuarioId, cajaId, total }) {
     INSERT INTO POS_VENTAS
       (USUARIO_ID, CAJA_ID, DINERO_RECIBIDO, CAMBIO, TOTAL, ESTADO_ID, CODIGO_TICKET, FECHA_CREACION)
     VALUES
-      (:usuario_id, :caja_id, :dinero_recibido, :cambio, :total, 1, :codigo_ticket, SYSTIMESTAMP)
+      (:usuario_id, :caja_id, :dinero_recibido, :cambio, :total, 26, :codigo_ticket, SYSTIMESTAMP)
     `,
     {
       usuario_id: Number(usuarioId),
