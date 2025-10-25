@@ -18,13 +18,15 @@ export function validarNombre(nombre) {
   return null; // null = sin error
 }
 
-export function validarUsuario(usuario) {
-  if (!usuario) return 'El usuario es obligatorio';
-  if (!/^[A-Za-z0-9]{1,9}$/.test(usuario)) {
-    return 'El usuario debe tener máximo 9 caracteres alfanuméricos, sin espacios ni caracteres especiales';
+export const validarUsuario = (v) => {
+  if (!v) return 'El usuario es obligatorio';
+  // Acepta cualquier longitud (>=1), pero solo alfanumérico (sin espacios ni especiales)
+  if (!/^[A-Za-z0-9]+$/.test(v)) {
+    return 'Solo caracteres alfanuméricos, sin espacios ni caracteres especiales';
   }
   return null;
-}
+};
+
 
 /**
  * Valida contraseña SIN lanzar toasts.
