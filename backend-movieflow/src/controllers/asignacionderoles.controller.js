@@ -32,16 +32,15 @@ exports.crearRol = async (req, res) => {
       return res.status(409).json({ message: 'El rol ya existe' });
     }
 
-    // Insertar nuevo rol
+    // Insertar nuevo rol (ID por secuencia)
     await connection.execute(
-      `INSERT INTO roles (nombre) VALUES (:nombre)`,
+      `INSERT INTO roles (id, nombre) VALUES (ROLES_SEQ.NEXTVAL, :nombre)`,
       [nombreLimpio],
       { autoCommit: true }
     );
 
     return res.status(201).json({ message: 'Rol registrado correctamente' });
   } catch (error) {
-    // Mapeo explícito de errores Oracle -> HTTP
     const msg = String(error?.message || '');
     const code = String(error?.code || '');
 
@@ -59,9 +58,7 @@ exports.crearRol = async (req, res) => {
     return res.status(500).json({ message: 'Error interno del servidor' });
   } finally {
     if (connection) {
-      try {
-        await connection.close();
-      } catch (err) {
+      try { await connection.close(); } catch (err) {
         console.error('Error al cerrar conexión:', err);
       }
     }
