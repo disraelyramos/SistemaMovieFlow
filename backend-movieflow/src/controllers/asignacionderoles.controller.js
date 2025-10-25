@@ -12,6 +12,9 @@ exports.crearRol = async (req, res) => {
   }
 
   const nombreLimpio = nombre.trim();
+  if (!nombreLimpio) {
+    return res.status(400).json({ message: 'El nombre es obligatorio.' });
+  }
 
   let connection;
 
@@ -38,6 +41,20 @@ exports.crearRol = async (req, res) => {
 
     return res.status(201).json({ message: 'Rol registrado correctamente' });
   } catch (error) {
+    // Mapeo explícito de errores Oracle -> HTTP
+    const msg = String(error?.message || '');
+    const code = String(error?.code || '');
+
+    if (msg.includes('ORA-00001') || code === 'ORA-00001') {
+      return res.status(409).json({ message: 'Ya existe un rol con ese nombre.' });
+    }
+    if (msg.includes('ORA-01400') || code === 'ORA-01400') {
+      return res.status(400).json({ message: 'Falta un dato requerido (revisa NOMBRE o columnas NOT NULL).' });
+    }
+    if (msg.includes('ORA-12899') || code === 'ORA-12899') {
+      return res.status(400).json({ message: 'El nombre excede la longitud permitida.' });
+    }
+
     console.error('Error al registrar rol:', error);
     return res.status(500).json({ message: 'Error interno del servidor' });
   } finally {
