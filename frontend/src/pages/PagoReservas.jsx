@@ -1,470 +1,600 @@
-// src/pages/PagoReservas.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "react-toastify";
+// src/pages/MisReservas.jsx
+import { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import '../styles/clientecartelera.css';
 
 const API_BASE =
   import.meta?.env?.VITE_API_BASE ||
   import.meta?.env?.VITE_API_BASE_URL ||
   import.meta?.env?.VITE_API_URL ||
-  "http://localhost:3001";
+  'http://localhost:3001';
 
-/* ===== Helpers de auth/usuario ===== */
-const getUsuarioId = () => {
-  try {
-    const userData =
-      JSON.parse(localStorage.getItem("userData")) ||
-      JSON.parse(sessionStorage.getItem("userData"));
-    return (
-      userData?.id ||
-      localStorage.getItem("mf_user_id") ||
-      localStorage.getItem("user_id") ||
-      null
-    );
-  } catch {
-    return null;
-  }
-};
-
-const authHeaders = () => {
-  const t = localStorage.getItem("mf_token");
-  const uid = getUsuarioId();
-  const headers = t ? { Authorization: `Bearer ${t}` } : {};
-  if (uid) headers["x-user-id"] = uid; // <- backend lo lee de aquí
-  return headers;
-};
-
-const fmt = (d) => {
-  try {
-    const dt = new Date(d);
-    const fecha = dt.toLocaleDateString("es-GT", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const hora = dt.toLocaleTimeString("es-GT", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${fecha} ${hora}`;
-  } catch {
-    return String(d);
-  }
-};
-
-const fmtQ = (n) => `Q ${Number(n || 0).toFixed(2)}`;
-
-/* ===== Regla de tarifas (frente) ===== */
-const calcTarifaPorDuracion = (durMin) => {
-  const d = Number(durMin);
-  if (!Number.isFinite(d)) return null;
-  if (d <= 150) return 3500;
-  if (d >= 180) return 4500;
-  // 151–179: misma política que backend (Q3,500)
-  return 3500;
-};
-
-async function getJson(url, options = {}) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+/* ==================== Sesión ==================== */
+function getClienteId() {
+  const v = localStorage.getItem('clienteId');
+  return v ? Number(v) : null;
 }
-async function postJson(url, body = {}, options = {}) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data?.ok === false) {
-    throw new Error(data?.error || data?.detail || `Error HTTP ${res.status}`);
-  }
-  return data;
+function getClienteEmail() {
+  try {
+    const raw = localStorage.getItem('mf_user');
+    if (raw) {
+      const u = JSON.parse(raw);
+      return u?.email || u?.correo || null;
+    }
+  } catch {}
+  try {
+    const t = localStorage.getItem('mf_token');
+    if (t && t.includes('.')) {
+      const payload = JSON.parse(atob(t.split('.')[1]));
+      return payload?.email || payload?.correo || null;
+    }
+  } catch {}
+  return null;
+}
+function authHeaders() {
+  const t = localStorage.getItem('mf_token');
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export default function PagoReservas() {
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+/* ==================== UI utils ==================== */
+const cleanNotas = (txt = '') =>
+  txt.replace(/\[UEMAIL:[^\]]+\]/g, '').replace(/\s{2,}/g, ' ').trim();
 
-  const [openPay, setOpenPay] = useState(false);
-  const [sel, setSel] = useState(null);
-  const [monto, setMonto] = useState("");
-  const [obs, setObs] = useState("");
+function fmtHoraFromISO(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('es-GT', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
-  const headers = useMemo(() => authHeaders(), []);
+function EstadoBadge({ estado = '—', puedeCancelar }) {
+  const up = String(estado).toUpperCase();
 
-  const fetchData = async () => {
+  // Etiqueta amigable
+  const label =
+    up === 'RESERVADO' ? 'PENDIENTE' :
+    up === 'CANCELADO' ? 'CANCELADA' :
+    up === 'FINALIZADO' ? 'FINALIZADA' :
+    estado;
+
+  // Colores según estado
+  let bg = '#e5e7eb', color = '#111827';
+  if (up === 'CANCELADO') { bg = '#fee2e2'; color = '#991b1b'; }
+  else if (up === 'RESERVADO') { // "Pendiente"
+    bg = puedeCancelar ? '#dcfce7' : '#fde68a';
+    color = puedeCancelar ? '#166534' : '#92400e';
+  }
+  else if (up === 'FINALIZADO') { bg = '#e2e8f0'; color = '#334155'; }
+
+  return (
+    <span
+      style={{
+        fontSize: 12,
+        padding: '6px 10px',
+        borderRadius: 999,
+        fontWeight: 800,
+        background: bg,
+        color,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/* ============ Normalizador API -> UI ============ */
+function mapRowToUI(r) {
+  // Tomar el inicio/fin desde cualquier variante que pueda traer el backend
+  const inicioISO =
+    r.inicioISO ||
+    r.START_ISO ||
+    r.START_TS ||
+    (r.FECHA && (r.HORA_INICIO || r.HORA_INICIO_TXT)
+      ? `${r.FECHA}T${(r.HORA_INICIO || r.HORA_INICIO_TXT).replace(' ', '')}:00`
+      : null);
+
+  const finISO =
+    r.finISO ||
+    r.END_ISO ||
+    r.END_TS ||
+    (r.FECHA && (r.HORA_FIN || r.HORA_FIN_TXT)
+      ? `${r.FECHA}T${(r.HORA_FIN || r.HORA_FIN_TXT).replace(' ', '')}:00`
+      : null);
+
+  // Sala (cubre distintos nombres)
+  const salaId = r.SALA_ID ?? r.salaId ?? null;
+  const salaNombre =
+    r.SALA_NOMBRE || r.salaNombre || (salaId ? `Sala ${salaId}` : 'Sala');
+
+  // Personas / notas / estado
+  const personas = r.PERSONAS ?? r.personas ?? null;
+  const notas = r.NOTAS ?? r.notas ?? '';
+  const estado = r.ESTADO ?? r.estado ?? 'RESERVADO';
+
+  // Flag pagado: soporta true/false, 1/0 o minúsculas
+  const pagado =
+    r.PAGADO === true || r.PAGADO === 1 ||
+    r.pagado === true || r.pagado === 1;
+
+  // Ventana 24h
+  const now = new Date();
+  const start = inicioISO ? new Date(inicioISO) : null;
+  let puedeCancelar =
+    String(estado).toUpperCase() === 'RESERVADO' &&
+    start instanceof Date &&
+    !isNaN(start) &&
+    (start.getTime() - now.getTime()) >= 24 * 60 * 60 * 1000;
+
+  // Si está pagado, ya no se puede cancelar desde la web
+  if (pagado) puedeCancelar = false;
+
+  return {
+    id: r.ID_EVENTO ?? r.id ?? r.idEvento,
+    salaId,
+    salaNombre,
+    inicioISO,
+    finISO,
+    personas,
+    notas,
+    estado,
+    puedeCancelar,
+    pagado,
+  };
+}
+
+
+/* ============ Filtro por fecha (cliente) ============ */
+const toDateOnly = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+const parseYMD = (yyyymmdd) => {
+  if (!yyyymmdd) return null;
+  const [y, m, d] = yyyymmdd.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+};
+const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+function rangeMatches(inicioISO, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return true;
+  const startDay = toDateOnly(inicioISO);
+  if (!startDay) return false;
+  if (dateFrom && !dateTo) {
+    const from = parseYMD(dateFrom);
+    return startDay >= from;
+  }
+  if (!dateFrom && dateTo) {
+    const to = endOfDay(parseYMD(dateTo));
+    return startDay <= to;
+  }
+  const from = parseYMD(dateFrom);
+  const to = endOfDay(parseYMD(dateTo));
+  return startDay >= from && startDay <= to;
+}
+
+/* ==================== Componente ==================== */
+export default function MisReservas() {
+  const navigate = useNavigate();
+
+  // ==== Fix global scroll + estilos buscador ====
+  const GlobalFix = () => (
+    <style>{`
+      html, body, #root { height:auto!important; min-height:100%!important; overflow-y:auto!important; overflow-x:hidden!important; }
+      .mr-page { position:relative; display:block; min-height:100%!important; height:auto!important; overflow:visible!important; }
+      body { margin:0!important; padding:0!important; }
+
+      /* --- Buscador por fecha --- */
+      .cf-search { 
+        background: rgba(255,255,255,0.06); 
+        border-radius: 14px; 
+        padding: 14px; 
+        margin-bottom: 12px; 
+      }
+      .cf-search .row-grid {
+        display: flex; 
+        flex-wrap: wrap; 
+        align-items: flex-end; 
+        justify-content: center; 
+        gap: 12px;
+      }
+      .cf-search .cf-field {
+        display: flex; 
+        flex-direction: column; 
+        gap: 6px; 
+        min-width: 180px; 
+        max-width: 240px;
+        flex: 0 1 220px;
+      }
+      .cf-search label {
+        color: #cbd5e1; 
+        font-size: 13px; 
+        font-weight: 700; 
+        letter-spacing: .2px;
+      }
+      .cf-search input[type="date"] {
+        padding: 10px 12px; 
+        border-radius: 10px; 
+        border: 1px solid #334155; 
+        background: #0b1726; 
+        color: #e2e8f0;
+        outline: none;
+      }
+      /* Icono del calendario en blanco (Blink/WebKit) */
+      .cf-search input[type="date"]::-webkit-calendar-picker-indicator{
+        filter: invert(1) brightness(1.6) contrast(1.2);
+        opacity: 1;
+        cursor: pointer;
+      }
+
+      .cf-search .toolbar {
+        display: flex; 
+        gap: 8px; 
+        flex-wrap: wrap; 
+        align-items: center;
+      }
+      .cf-btn-mini {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: linear-gradient(90deg, #f59e0b, #ef4444);
+        color: #fff;
+        font-weight: 800;
+        font-size: 13px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,.12);
+        width: auto;
+        min-width: unset;
+      }
+      .cf-btn-mini:active { transform: translateY(1px); }
+      @media (max-width: 520px){
+        .cf-search .cf-field { min-width: 160px; flex: 1 1 100%; }
+        .cf-search .toolbar { justify-content: center; }
+      }
+
+      /* === KPIs de estado === */
+      .kpi-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin: 6px 0 14px; }
+      .kpi-chip{
+        display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px;
+        border:1px solid #22314a; background:#0b1320; color:#d9e4ff; font-weight:800; letter-spacing:.2px;
+      }
+      .kpi-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+      .kpi-p{ background:#fbbf24; }    /* Pendiente */
+      .kpi-c{ background:#ef4444; }    /* Canceladas */
+      .kpi-f{ background:#94a3b8; }    /* Finalizadas */
+    `}</style>
+  );
+  const pageRef = useRef(null);
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    if (pageRef.current) pageRef.current.scrollTop = 0;
+  }, []);
+
+  // ==== Estado ====
+  const [reservas, setReservas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+
+  const [confirmId, setConfirmId] = useState(null);
+  const [loadingCancel, setLoadingCancel] = useState(false);
+
+  // Filtros por estado
+  const [filtro, setFiltro] = useState('todas');
+
+  // Filtro por fecha (RF06)
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const clienteId = useMemo(() => getClienteId(), []);
+  const email = useMemo(() => getClienteEmail(), []);
+
+  const fetchReservas = async () => {
+    if (!clienteId && !email) {
+      setLoading(false);
+      setErr('No se encontró sesión de cliente.');
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (desde) params.set("desde", desde);
-      if (hasta) params.set("hasta", hasta);
-      const url = `${API_BASE}/api/pagos-reservas/por-cobrar${
-        params.toString() ? "?" + params.toString() : ""
-      }`;
-      const data = await getJson(url, { headers });
-      setItems(data?.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Error al cargar reservas por cobrar");
+      if (clienteId) params.append('clienteId', String(clienteId));
+      if (email) params.append('email', String(email));
+
+      const res = await fetch(
+        `${API_BASE}/api/eventos-reservados/mis?${params.toString()}`,
+        { headers: { ...authHeaders() } }
+      );
+      if (!res.ok) {
+        setErr(`HTTP ${res.status}`);
+        setReservas([]);
+        return;
+      }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data.map(mapRowToUI) : [];
+      list.sort((a, b) => new Date(b.inicioISO) - new Date(a.inicioISO));
+      setReservas(list);
+    } catch (e) {
+      setErr(e.message || 'Error al cargar reservas');
+      setReservas([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { fetchReservas(); }, [clienteId, email]);
 
-  /* ===== Validación y envío ===== */
-  const onPagar = async () => {
+  const confirmarCancelacion = async () => {
+    if (!confirmId) return;
     try {
-      const eventoId = Number(sel?.ID_EVENTO);
-      const m = Number(monto);
-      const usuarioId = Number(getUsuarioId());
-
-      if (!eventoId) return toast.warn("Evento no seleccionado");
-      if (!m || m <= 0) return toast.warn("Ingrese un monto válido");
-      if (!usuarioId) return toast.error("No se pudo obtener el usuario logueado");
-
-      // **Validación de tarifa según duración (front)**
-      const dur = Number(sel?.DURACION_MIN ?? sel?.DURACIONMIN);
-      const tarifa = calcTarifaPorDuracion(dur);
-      if (tarifa == null) {
-        return toast.error("No fue posible determinar la tarifa del evento.");
-      }
-      if (Number(m.toFixed(2)) !== Number(tarifa.toFixed(2))) {
-        return toast.error(
-          `El monto debe ser ${fmtQ(tarifa)} para ${dur} minutos.`
-        );
-      }
-
-      const body = {
-        eventoId,
-        monto: m, // el backend volverá a imponer la tarifa correcta
-        usuarioId,
-        obs: (obs || "").trim() || null,
-      };
-
-      // enviar también x-user-id en headers (además del Authorization que ya arma authHeaders)
-      const mergedHeaders = { ...headers, "x-user-id": String(usuarioId) };
-
-      await postJson(`${API_BASE}/api/pagos-reservas`, body, {
-        headers: mergedHeaders,
+      setLoadingCancel(true);
+      await fetch(`${API_BASE}/api/eventos-reservados/${confirmId}/cancelar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ clienteId, email }),
       });
-      toast.success("Pago registrado");
-      setOpenPay(false);
-      setMonto("");
-      setObs("");
-      setSel(null);
-      // refrescar lista
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      toast.error(String(err.message || err));
+      await fetchReservas();
+    } finally {
+      setLoadingCancel(false);
+      setConfirmId(null);
     }
   };
 
-  /* ===== Abrir modal con monto precargado ===== */
-  const openPayModal = (row) => {
-    setSel(row);
-    const dur = Number(row?.DURACION_MIN ?? row?.DURACIONMIN);
-    const tarifa = calcTarifaPorDuracion(dur);
-    setMonto(tarifa != null ? String(tarifa.toFixed(2)) : "");
-    setOpenPay(true);
+  // === Contadores KPI (aplican solo el filtro de fechas, no el filtro de estado) ===
+  const kpi = useMemo(() => {
+    const base = { P: 0, C: 0, F: 0 };
+    reservas.forEach((r) => {
+      if (!rangeMatches(r.inicioISO, dateFrom, dateTo)) return;
+      const up = String(r.estado || '').toUpperCase();
+      if (up === 'RESERVADO') base.P += 1;
+      else if (up === 'CANCELADO') base.C += 1;
+      else if (up === 'FINALIZADO') base.F += 1;
+    });
+    return base;
+  }, [reservas, dateFrom, dateTo]);
+
+  // === Aplicar filtros (estado + rango de fecha) ===
+  const reservasFiltradas = reservas.filter((r) => {
+    const estadoOk = filtro.startsWith('estado:')
+      ? String(r.estado).toUpperCase() === filtro.split(':')[1]
+      : true;
+    const fechaOk = rangeMatches(r.inicioISO, dateFrom, dateTo);
+    return estadoOk && fechaOk;
+  });
+
+  // Atajos de rango
+  const setHoy = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const v = `${y}-${m}-${day}`;
+    setDateFrom(v);
+    setDateTo(v);
   };
+  const setEsteMes = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const first = `${y}-${String(m).padStart(2, '0')}-01`;
+    const lastDate = new Date(y, m, 0).getDate();
+    const last = `${y}-${String(m).padStart(2, '0')}-${String(lastDate).padStart(2, '0')}`;
+    setDateFrom(first);
+    setDateTo(last);
+  };
+  const limpiarFechas = () => { setDateFrom(''); setDateTo(''); };
 
-  /* ===== UI ===== */
+  /* ==================== Render ==================== */
   return (
-    <div className="pr-container" style={{ padding: 20 }}>
-      <div
-        className="pr-card"
-        style={{
-          background: "#111827",
-          color: "#fff",
-          borderRadius: 16,
-          boxShadow: "0 6px 22px rgba(0,0,0,0.3)",
-          padding: 16,
-        }}
-      >
-        <div
-          className="pr-header"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 20 }}>Pago de Reservas (Caja)</h2>
-          <div
-            style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-          >
-            <label style={{ fontSize: 13, opacity: 0.85 }}>Desde</label>
-            <input
-              type="date"
-              value={desde}
-              onChange={(e) => setDesde(e.target.value)}
-              style={{
-                background: "#1f2937",
-                color: "#fff",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                padding: "6px 8px",
-              }}
-            />
-            <label style={{ fontSize: 13, opacity: 0.85 }}>Hasta</label>
-            <input
-              type="date"
-              value={hasta}
-              onChange={(e) => setHasta(e.target.value)}
-              style={{
-                background: "#1f2937",
-                color: "#fff",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                padding: "6px 8px",
-              }}
-            />
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "none",
-                background: "#F59E0B",
-                color: "#111",
-                fontWeight: 600,
-              }}
-            >
-              {loading ? "Cargando..." : "Buscar"}
-            </button>
-          </div>
-        </div>
-
-        {/* Nota de tarifas (visible para el empleado) */}
-        <div
-          style={{
-            marginTop: 10,
-            background: "#0b1220",
-            border: "1px solid #2b3445",
-            borderRadius: 10,
-            padding: "10px 12px",
-            color: "#E5E7EB",
-            fontSize: 13,
-          }}
-        >
-          <b>Tarifas de reservas:</b>{" "}
-          ≤ 150 minutos: <b>{fmtQ(3500)}</b> — ≥ 180 minutos:{" "}
-          <b>{fmtQ(4500)}</b>. (Entre 151 y 179 minutos aplica{" "}
-          <b>{fmtQ(3500)}</b>).
-        </div>
-
-        <div style={{ marginTop: 12, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#0b1220" }}>
-                <th style={th}>Evento</th>
-                <th style={th}>Sala</th>
-                <th style={th}>Inicio</th>
-                <th style={th}>Fin</th>
-                <th style={th}>Personas</th>
-                <th style={th}>Notas</th>
-                <th style={thCenter}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    style={{ padding: 16, textAlign: "center", color: "#9CA3AF" }}
-                  >
-                    {loading
-                      ? "Cargando..."
-                      : "Sin reservas confirmadas por cobrar en el rango seleccionado"}
-                  </td>
-                </tr>
-              )}
-              {items.map((r) => (
-                <tr key={r.ID_EVENTO} style={{ borderTop: "1px solid #1f2937" }}>
-                  <td style={td}>{r.ID_EVENTO}</td>
-                  <td style={td}>{r.SALA_NOMBRE || r.SALA_ID}</td>
-                  <td style={td}>{fmt(r.START_TS)}</td>
-                  <td style={td}>{fmt(r.END_TS)}</td>
-                  <td style={td}>{r.PERSONAS}</td>
-                  <td style={td}>
-                    {String(r.NOTAS || "").replace(/\[UEMAIL:[^\]]+\]/g, "").trim()}
-                  </td>
-                  <td style={{ ...td, textAlign: "center" }}>
-                    <button
-                      onClick={() => openPayModal(r)}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 10,
-                        border: "none",
-                        background: "#10B981",
-                        color: "#111",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Registrar pago
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Modal de pago */}
-        {openPay && (
-          <div className="pr-modal" style={modalWrap}>
-            <div style={modalCard}>
-              <h3 style={{ marginTop: 0, marginBottom: 8 }}>Pago en efectivo</h3>
-              <p style={{ margin: "6px 0 12px 0", color: "#D1D5DB" }}>
-                Evento <b>#{sel?.ID_EVENTO}</b> — Sala{" "}
-                <b>{sel?.SALA_NOMBRE || sel?.SALA_ID}</b>
-                <br />
-                Inicio: {fmt(sel?.START_TS)}
-              </p>
-
-              {/* Info: duración y tarifa calculada */}
-              <div
-                style={{
-                  background: "#0b1220",
-                  border: "1px solid #2b3445",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  color: "#E5E7EB",
-                  fontSize: 13,
-                  marginBottom: 10,
-                }}
-              >
-                Duración:{" "}
-                <b>{Number(sel?.DURACION_MIN ?? sel?.DURACIONMIN) || 0} min</b> — Tarifa:{" "}
-                <b>
-                  {fmtQ(
-                    calcTarifaPorDuracion(
-                      Number(sel?.DURACION_MIN ?? sel?.DURACIONMIN)
-                    ) || 0
-                  )}
-                </b>
+    <>
+      <GlobalFix />
+      <main className="mr-page" ref={pageRef}>
+        <div className="cf-bg">
+          <div className="cf-container">
+            {/* Banner / Header */}
+            <header className="cf-header">
+              <h1>📒 Mis reservas</h1>
+              <p>Consulta y gestiona tus eventos y funciones privadas.</p>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', marginTop:8 }}>
+                <button className="cf-btn" onClick={() => navigate('/bienvenida-cliente')}>
+                  ⬅️ Inicio
+                </button>
+                <button className="cf-btn cf-btn-primary" onClick={() => navigate('/reservar-evento')}>
+                  🎉 Reservar evento
+                </button>
+                <button className="cf-btn" onClick={fetchReservas} title="Actualizar listados">
+                  ↻ Actualizar
+                </button>
+                <button className="cf-btn" onClick={() => navigate('/mis-solicitudes')}>
+                  📒 Ver mis solicitudes de reserva
+                </button>
               </div>
+            </header>
 
-              <div style={{ display: "grid", gap: 10 }}>
-                <label style={{ fontSize: 13, color: "#E5E7EB" }}>
-                  Monto (GTQ)
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                    placeholder="0.00"
-                    style={inp}
-                  />
-                </label>
-                <label style={{ fontSize: 13, color: "#E5E7EB" }}>
-                  Observaciones
-                  <textarea
-                    value={obs}
-                    onChange={(e) => setObs(e.target.value)}
-                    placeholder="Opcional"
-                    rows={3}
-                    style={{ ...inp, resize: "vertical" }}
-                  />
-                </label>
+            {/* === RF06: Búsqueda por fecha (UI) === */}
+            <section className="cf-search">
+              <div className="row-grid">
+                <div className="cf-field">
+                  <label htmlFor="f-desde">Desde</label>
+                  <input id="f-desde" type="date" value={dateFrom} onChange={(e)=>setDateFrom(e.target.value)} />
+                </div>
+
+                <div className="cf-field">
+                  <label htmlFor="f-hasta">Hasta</label>
+                  <input id="f-hasta" type="date" value={dateTo} onChange={(e)=>setDateTo(e.target.value)} />
+                </div>
+
+                <div className="toolbar">
+                  <button className="cf-btn-mini" onClick={setHoy} title="Filtrar por hoy">Hoy</button>
+                  <button className="cf-btn-mini" onClick={setEsteMes} title="Filtrar por el mes actual">Este mes</button>
+                  <button className="cf-btn-mini" onClick={limpiarFechas} title="Quitar filtro de fechas">Limpiar</button>
+                </div>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 8,
-                  marginTop: 14,
-                }}
-              >
+            </section>
+
+            {/* KPIs de estado (con rango de fechas aplicado) */}
+            <div className="kpi-row">
+              <div className="kpi-chip"><span className="kpi-dot kpi-p" /> Pendientes <span>·</span> <b>{kpi.P}</b></div>
+              <div className="kpi-chip"><span className="kpi-dot kpi-c" /> Canceladas <span>·</span> <b>{kpi.C}</b></div>
+              <div className="kpi-chip"><span className="kpi-dot kpi-f" /> Finalizadas <span>·</span> <b>{kpi.F}</b></div>
+            </div>
+
+            {/* Filtros por estado */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, justifyContent:'center' }}>
+              {[
+                { key: 'todas', label: 'Todas' },
+                { key: 'estado:RESERVADO', label: 'Pendientes' },   // mapea RESERVADO → Pendiente
+                { key: 'estado:CANCELADO', label: 'Canceladas' },
+                { key: 'estado:FINALIZADO', label: 'Finalizadas' },
+              ].map((f) => (
                 <button
-                  onClick={() => {
-                    setOpenPay(false);
-                    setSel(null);
-                  }}
-                  style={btnGhost}
+                  key={f.key}
+                  className={`cf-btn ${filtro === f.key ? 'cf-btn-primary' : ''}`}
+                  onClick={() => setFiltro(f.key)}
                 >
-                  Cancelar
+                  {f.label}
                 </button>
-                <button onClick={onPagar} style={btnPrimary}>
-                  Registrar pago {monto ? `(${fmtQ(monto)})` : ""}
-                </button>
+              ))}
+            </div>
+
+            {/* Listado */}
+            {loading ? (
+              <div className="cf-evt-card">Cargando…</div>
+            ) : err ? (
+              <div className="cf-evt-card" style={{ color: 'red' }}>{err}</div>
+            ) : reservasFiltradas.length === 0 ? (
+              <div className="cf-evt-card">No hay reservas.</div>
+            ) : (
+              <div className="cf-grid" style={{ gap: 18 }}>
+                {reservasFiltradas.map((r) => {
+                  const disabled =
+                    r.pagado ||
+                    !r.puedeCancelar ||
+                    String(r.estado).toUpperCase() === 'CANCELADO';
+                  const mismaFecha = fmtFecha(r.inicioISO) === fmtFecha(r.finISO);
+                  const esPendiente = String(r.estado).toUpperCase() === 'RESERVADO';
+
+                  return (
+                    <article key={r.id} className="cf-card" style={{ background: '#fff' }}>
+                      <div style={{ padding: 16, color: '#111' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <strong style={{ color: '#111' }}>
+                            {r.salaNombre || `Sala ${r.salaId}`}
+                          </strong>
+                          <EstadoBadge estado={r.estado} puedeCancelar={r.puedeCancelar} />
+                        </div>
+
+                        <div style={{ fontSize: 14, color: '#111', lineHeight: 1.6 }}>
+                          <div>
+                            Fecha{' '}
+                            <b>
+                              {mismaFecha
+                                ? fmtFecha(r.inicioISO)
+                                : `${fmtFecha(r.inicioISO)} → ${fmtFecha(r.finISO)}`}
+                            </b>
+                          </div>
+
+                          <div>Inicio: <b>{fmtHoraFromISO(r.inicioISO)}</b></div>
+                          <div>Fin: <b>{fmtHoraFromISO(r.finISO)}</b></div>
+                          <div>Personas: <b>{r.personas ?? '-'}</b></div>
+                          {r.notas ? <div>Notas: {cleanNotas(r.notas)}</div> : null}
+
+                          {/* Aviso prioridad: pagado */}
+                          {esPendiente && r.pagado && (
+                            <div style={{
+                              marginTop: 10,
+                              background: '#ecfdf5',
+                              border: '1px solid #a7f3d0',
+                              color: '#065f46',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 700
+                            }}>
+                              ✅ Reserva pagada
+                            </div>
+                          )}
+
+                          {/* Aviso 24h (solo si no está pagado) */}
+                          {esPendiente && !r.pagado && !r.puedeCancelar && (
+                            <div style={{
+                              marginTop: 10,
+                              background: '#fff7ed',
+                              border: '1px solid #fed7aa',
+                              color: '#7c2d12',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 700
+                            }}>
+                              ⚠️ Esta reserva comienza en menos de 24 h.
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => setConfirmId(r.id)}
+                          disabled={disabled}
+                          className="cf-btn"
+                          style={{
+                            width: '100%',
+                            marginTop: 12,
+                            background: disabled ? '#e5e7eb' : '#ef4444',
+                            color: disabled ? '#6b7280' : '#fff',
+                            fontWeight: 700,
+                          }}
+                          title={
+                            r.pagado
+                              ? 'Reserva pagada: no se puede cancelar en línea.'
+                              : (r.puedeCancelar ? 'Cancelar reserva' : 'Solo puede cancelarse hasta 24 h antes')
+                          }
+                        >
+                          Cancelar reserva
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Modal */}
+          {confirmId && (
+            <div className="cf-modal" onClick={() => setConfirmId(null)}>
+              <div className="cf-modal-content" onClick={(e) => e.stopPropagation()}>
+                <button className="cf-close" onClick={() => setConfirmId(null)}>×</button>
+                <div className="cf-modal-header">
+                  <h2>Confirmar cancelación</h2>
+                  <p>¿Seguro que quieres cancelar esta reserva?</p>
+                </div>
+                <div className="cf-modal-body" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="cf-btn" onClick={() => setConfirmId(null)}>No, volver</button>
+                  <button className="cf-btn cf-btn-primary" onClick={confirmarCancelacion}>
+                    {loadingCancel ? 'Cancelando…' : 'Sí, cancelar'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </div>
+      </main>
+    </>
   );
 }
-
-const th = {
-  textAlign: "left",
-  padding: "10px 12px",
-  fontSize: 13,
-  fontWeight: 700,
-  color: "#CBD5E1",
-};
-const thCenter = { ...th, textAlign: "center" };
-const td = { padding: "10px 12px", fontSize: 13, color: "#E5E7EB" };
-const inp = {
-  width: "100%",
-  marginTop: 6,
-  background: "#0b1220",
-  color: "#fff",
-  border: "1px solid #2b3445",
-  borderRadius: 10,
-  padding: "10px 12px",
-  outline: "none",
-};
-const modalWrap = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,.55)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 16,
-  zIndex: 1000,
-};
-const modalCard = {
-  width: "100%",
-  maxWidth: 520,
-  background: "#111827",
-  color: "#fff",
-  borderRadius: 14,
-  boxShadow: "0 10px 30px rgba(0,0,0,.35)",
-  padding: 16,
-  border: "1px solid #1f2937",
-};
-const btnGhost = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  background: "transparent",
-  border: "1px solid #374151",
-  color: "#E5E7EB",
-  fontWeight: 600,
-};
-const btnPrimary = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "none",
-  background: "#F59E0B",
-  color: "#111827",
-  fontWeight: 800,
-};
