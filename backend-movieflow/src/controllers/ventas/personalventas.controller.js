@@ -375,7 +375,7 @@ exports.procesarVenta = async (req, res) => {
       `INSERT INTO POS_VENTAS
         (USUARIO_ID, CAJA_ID, DINERO_RECIBIDO, CAMBIO, TOTAL, ESTADO_ID, CODIGO_TICKET, FECHA_CREACION)
       VALUES
-        (:usuario_id, :caja_id, :dinero_recibido, 0, 0, 21, :codigo_ticket, SYSTIMESTAMP)`,
+        (:usuario_id, :caja_id, :dinero_recibido, 0, 0, :estado_id, :codigo_ticket, SYSTIMESTAMP)`,
       {
         usuario_id,
         caja_id,
