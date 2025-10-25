@@ -368,6 +368,24 @@ exports.procesarVenta = async (req, res) => {
     console.timeEnd("ventas::ticketSeq");
     const codigo_ticket = ticketSeq.rows[0].NUEVO_TICKET;
 
+    /* === NUEVO: resolver ESTADO_ID por nombre 'PROCESADA' === */
+    const rsEstado = await connection.execute(
+      `SELECT ID_ESTADO 
+         FROM POS_ESTADO_VENTA 
+        WHERE UPPER(NOMBRE) = UPPER(:n)
+        FETCH FIRST 1 ROWS ONLY`,
+      { n: 'PROCESADA' },
+      opts()
+    );
+    const estadoId = rsEstado.rows?.[0]?.ID_ESTADO;
+    if (!estadoId) {
+      await connection.rollback();
+      return res.status(500).json({
+        message: "Catálogo POS_ESTADO_VENTA no tiene el estado 'PROCESADA'."
+      });
+    }
+    /* === FIN NUEVO === */
+
     // 4) Insert venta SIN ID_VENTA (IDENTITY GENERATED ALWAYS lo crea)
     console.log("ventas::insertVenta — ticket =", codigo_ticket);
     console.time("ventas::insertVenta");
@@ -375,11 +393,12 @@ exports.procesarVenta = async (req, res) => {
       `INSERT INTO POS_VENTAS
         (USUARIO_ID, CAJA_ID, DINERO_RECIBIDO, CAMBIO, TOTAL, ESTADO_ID, CODIGO_TICKET, FECHA_CREACION)
       VALUES
-        (:usuario_id, :caja_id, :dinero_recibido, 0, 0, 1, :codigo_ticket, SYSTIMESTAMP)`,
+        (:usuario_id, :caja_id, :dinero_recibido, 0, 0, :estado_id, :codigo_ticket, SYSTIMESTAMP)`,
       {
         usuario_id,
         caja_id,
         dinero_recibido: Number(dinero_recibido),
+        estado_id: estadoId,           // << usa el ID_ESTADO real
         codigo_ticket,
       },
       opts()
